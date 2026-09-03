@@ -134,8 +134,7 @@ Use `log-lookups: true` for a while to discover the ASNs your players actually c
 ## Notes
 
 - The database is loaded fully in memory (~22 MiB) so the file on disk can be replaced while the proxy is running.
-- Lookups use the address of the socket. If something else sits in front of the proxy (a TCP load balancer, a tunnel),
-  every player will be resolved to that machine's ASN.
+- When TransferProxy's `proxy-protocol: true` is enabled, ISPSender automatically resolves the real player IP from the PROXY protocol header.
 - ISPSender registers a `READY` listener. Any other plugin registering one on the same event will also run, so do not
   install two plugins that both transfer players.
 - The IPinfo Lite database is redistributed under [CC BY-SA 4.0](https://ipinfo.io/lite); it is downloaded at runtime

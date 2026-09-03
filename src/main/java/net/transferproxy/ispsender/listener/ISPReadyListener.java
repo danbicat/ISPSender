@@ -14,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -61,8 +62,48 @@ public final class ISPReadyListener implements ReadyListener {
         connection.transfer(route.server().host(), route.server().port());
     }
 
+    private static final Method GET_REMOTE_ADDRESS_METHOD;
+
+    static {
+        Method method = null;
+        try {
+            method = PlayerConnection.class.getMethod("getRemoteAddress");
+        } catch (final Throwable ignored) {
+            try {
+                final Class<?> implClass = Class.forName("net.transferproxy.network.connection.PlayerConnectionImpl");
+                method = implClass.getMethod("getRemoteAddress");
+            } catch (final Throwable alsoIgnored) {
+            }
+        }
+        if (method != null) {
+            method.setAccessible(true);
+        }
+        GET_REMOTE_ADDRESS_METHOD = method;
+    }
+
+    private static @Nullable SocketAddress getRemoteSocketAddress(final @NotNull PlayerConnection connection) {
+        if (GET_REMOTE_ADDRESS_METHOD != null) {
+            try {
+                final Object result = GET_REMOTE_ADDRESS_METHOD.invoke(connection);
+                if (result instanceof SocketAddress socketAddress) {
+                    return socketAddress;
+                }
+            } catch (final Throwable ignored) {
+            }
+        }
+        try {
+            final Method method = connection.getClass().getMethod("getRemoteAddress");
+            final Object result = method.invoke(connection);
+            if (result instanceof SocketAddress socketAddress) {
+                return socketAddress;
+            }
+        } catch (final Throwable ignored) {
+        }
+        return connection.getChannel().remoteAddress();
+    }
+
     private static @Nullable InetAddress getAddress(final @NotNull PlayerConnection connection) {
-        final SocketAddress remoteAddress = connection.getChannel().remoteAddress();
+        final SocketAddress remoteAddress = getRemoteSocketAddress(connection);
         if (remoteAddress instanceof final InetSocketAddress socketAddress) {
             final InetAddress address = socketAddress.getAddress();
             if (address != null) {

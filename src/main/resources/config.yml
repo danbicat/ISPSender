@@ -1,0 +1,70 @@
+# ------------------------------------------------------------------------------
+#  ISPSender
+#
+#  Looks up the ASN and the country of every incoming connection in the IPinfo
+#  Lite database (downloaded on startup) and transfers the player to the server
+#  configured for that ASN / country.
+#
+#  Rules are evaluated in this order:
+#      asn-servers  ->  country-servers  ->  default-server
+# ------------------------------------------------------------------------------
+
+# Your IPinfo token (free: https://ipinfo.io/signup).
+# The IPINFO_TOKEN environment variable overrides this value when it is set.
+token: "YOUR_IPINFO_TOKEN"
+
+# Download URL of the database. "{token}" is replaced by the token above.
+database-url: "https://ipinfo.io/data/ipinfo_lite.mmdb?token={token}"
+
+# File name of the database inside plugins/ISPSender/
+database-file: "ipinfo_lite.mmdb"
+
+# Download a fresh database when the plugin starts.
+# When a database is already present it is loaded first, and the download runs
+# in the background so the proxy is never blocked at startup.
+update-on-start: true
+
+# Re-download the database every X minutes (0 = disabled, 1440 = once a day).
+update-interval-minutes: 0
+
+# HTTP timeouts used by the downloader, in seconds.
+connect-timeout-seconds: 15
+read-timeout-seconds: 180
+
+# Logs every lookup: player, IP, ASN, country and the chosen server.
+# Very useful to write the rules below, noisy in production.
+log-lookups: false
+
+# ------------------------------------------------------------------------------
+#  Rules
+#
+#  Server format is "HOST:PORT" (":PORT" may be omitted, 25565 by default).
+#  Every rule takes either a single server or a list of servers; with a list,
+#  one of them is picked at random for each player, which spreads the load.
+#  Listing the same server twice simply doubles its chances.
+# ------------------------------------------------------------------------------
+
+# Key: the ASN, with or without the "AS" prefix ("AS4766" and "4766" are equal).
+asn-servers:
+  "AS4766":                              # Korea Telecom, balanced over 2 servers
+    - "kt1.example.com:25565"
+    - "kt2.example.com:25565"
+  "AS9318": "lgu.example.com:25565"      # LG U+
+  "AS4837": "cn.example.com:25565"       # China Unicom
+
+# Key: the ISO country code ("KR") or the country name returned by IPinfo
+# ("South Korea"). Both are matched case-insensitively.
+country-servers:
+  "KR":
+    - "kr1.example.com:25565"
+    - "kr2.example.com:25565"
+    - "kr3.example.com:25565"
+  "JP": "jp.example.com:25565"
+  "US": "us.example.com:25565"
+
+# Used when no rule above matches, or when the IP could not be resolved.
+# Accepts a list too. Leave it empty ("") to kick the player instead.
+default-server: "global.example.com:25565"
+
+# Kick message used when no server could be resolved (MiniMessage format).
+no-server-message: "<red>No server is available for your connection."

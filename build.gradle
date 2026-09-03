@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.6.1'
+}
+
+group = 'net.transferproxy'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://jitpack.io' }
+}
+
+dependencies {
+    // Provided by the proxy itself (brings Netty, Adventure, SLF4J, Jackson, ...)
+    compileOnly 'com.github.YvanMazy.TransferProxy:api:1.2.1'
+
+    // MMDB reader, shaded into the plugin jar
+    implementation 'com.maxmind.db:maxmind-db:4.1.0'
+}
+
+// Compiles with any JDK >= 17 while still targeting Java 17 like the proxy.
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+shadowJar {
+    archiveBaseName = 'ISPSender'
+    archiveClassifier = ''
+    archiveVersion = project.version
+
+    relocate 'com.maxmind.db', 'net.transferproxy.ispsender.libs.maxmind.db'
+}
+
+// The shaded jar is the only artifact: it takes the plain jar's name, so the plain
+// jar is disabled to not overwrite it.
+jar {
+    enabled = false
+}
+
+build.dependsOn(shadowJar)

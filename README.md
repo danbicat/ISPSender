@@ -58,7 +58,7 @@ update-interval-minutes: 0      # 0 = disabled, 1440 = once a day
 connect-timeout-seconds: 15
 read-timeout-seconds: 180
 
-log-lookups: false              # logs "player (ip, ASN, country) -> server"
+log-lookups: true               # logs "player (ip, ASN, country) -> server"
 
 asn-servers:                    # checked first
   "AS4766":                     # a list is balanced randomly
@@ -85,7 +85,7 @@ no-server-message: "<red>No server is available for your connection."
 | `update-interval-minutes` | `0` | Re-download every X minutes, `0` disables it. |
 | `connect-timeout-seconds` | `15` | Connection timeout of the downloader. |
 | `read-timeout-seconds` | `180` | Timeout of the whole download. |
-| `log-lookups` | `false` | Log every resolved connection. |
+| `log-lookups` | `true` | Log every resolved connection. |
 | `asn-servers` | *(empty)* | ASN → server (or list of servers) rules. |
 | `country-servers` | *(empty)* | Country → server (or list of servers) rules. |
 | `default-server` | *(empty)* | Fallback server or list, empty kicks the player instead. |

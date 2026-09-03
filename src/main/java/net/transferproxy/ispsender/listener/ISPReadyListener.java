@@ -63,7 +63,18 @@ public final class ISPReadyListener implements ReadyListener {
 
     private static @Nullable InetAddress getAddress(final @NotNull PlayerConnection connection) {
         final SocketAddress remoteAddress = connection.getChannel().remoteAddress();
-        return remoteAddress instanceof final InetSocketAddress socketAddress ? socketAddress.getAddress() : null;
+        if (remoteAddress instanceof final InetSocketAddress socketAddress) {
+            final InetAddress address = socketAddress.getAddress();
+            if (address != null) {
+                return address;
+            }
+            try {
+                return InetAddress.getByName(socketAddress.getHostString());
+            } catch (final Exception ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static @NotNull String describe(final @Nullable InetAddress address, final @Nullable IPInfoRecord record) {

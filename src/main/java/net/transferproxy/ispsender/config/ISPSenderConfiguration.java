@@ -22,9 +22,9 @@ public final class ISPSenderConfiguration {
     private final int updateIntervalMinutes;
     private final int connectTimeoutSeconds;
     private final int readTimeoutSeconds;
-    private final boolean logLookups;
-    private final Map<String, Object> asnServers;
-    private final Map<String, Object> countryServers;
+    private boolean logLookups;
+    private Map<String, Object> asnServers;
+    private Map<String, Object> countryServers;
     private final Object defaultServer;
     private final String noServerMessage;
 
@@ -36,7 +36,7 @@ public final class ISPSenderConfiguration {
         this.updateIntervalMinutes = 0;
         this.connectTimeoutSeconds = 15;
         this.readTimeoutSeconds = 180;
-        this.logLookups = false;
+        this.logLookups = true;
         this.asnServers = Map.of();
         this.countryServers = Map.of();
         this.defaultServer = List.of();
@@ -91,6 +91,10 @@ public final class ISPSenderConfiguration {
         return this.logLookups;
     }
 
+    public void setLogLookups(final boolean logLookups) {
+        this.logLookups = logLookups;
+    }
+
     /**
      * @return the ASN rules, every value being a single {@code HOST:PORT} string or a list of them
      */
@@ -98,11 +102,29 @@ public final class ISPSenderConfiguration {
         return this.asnServers;
     }
 
+    @SuppressWarnings("unchecked")
+    public void setAsnServers(final @Nullable Object asnServers) {
+        if (asnServers instanceof Map<?, ?> map) {
+            this.asnServers = (Map<String, Object>) map;
+        } else {
+            this.asnServers = Map.of();
+        }
+    }
+
     /**
      * @return the country rules, every value being a single {@code HOST:PORT} string or a list of them
      */
     public Map<String, Object> getCountryServers() {
         return this.countryServers;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void setCountryServers(final @Nullable Object countryServers) {
+        if (countryServers instanceof Map<?, ?> map) {
+            this.countryServers = (Map<String, Object>) map;
+        } else {
+            this.countryServers = Map.of();
+        }
     }
 
     /**

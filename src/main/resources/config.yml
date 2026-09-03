@@ -32,8 +32,7 @@ connect-timeout-seconds: 15
 read-timeout-seconds: 180
 
 # Logs every lookup: player, IP, ASN, country and the chosen server.
-# Very useful to write the rules below, noisy in production.
-log-lookups: false
+log-lookups: true
 
 # ------------------------------------------------------------------------------
 #  Rules

@@ -1,0 +1,5 @@
+name: ISPSender
+author: SweetRa1n
+version: ${version}
+description: Transfers players to a server based on their ASN or country, using the IPinfo Lite database.
+main: net.transferproxy.ispsender.ISPSenderPlugin

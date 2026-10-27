@@ -153,6 +153,7 @@ public final class WebPanel implements AutoCloseable {
                         switch (path) {
                             case "/", "/index.html" -> "index.html";
                             case "/app.js" -> "app.js";
+                            case "/theme.js" -> "theme.js";
                             case "/style.css" -> "style.css";
                             default -> null;
                         };

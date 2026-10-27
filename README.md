@@ -17,7 +17,7 @@
 ./gradlew test shadowJar
 ```
 
-`build/libs/ISPSender-1.1.0.jar`를 프록시의 `plugins/`에 넣고 시작하면 `plugins/ISPSender/config.yml`이 생성됩니다. IPinfo 토큰과 실제 서버 주소를 설정하고 재시작하세요. 기존 1.0 설정도 읽을 수 있으며 새 항목은 기본값을 사용합니다.
+`build/libs/ISPSender-1.1.1.jar`를 프록시의 `plugins/`에 넣고 시작하면 `plugins/ISPSender/config.yml`이 생성됩니다. IPinfo 토큰과 실제 서버 주소를 설정하고 재시작하세요. 기존 1.0 설정도 읽을 수 있으며 새 항목은 기본값을 사용합니다.
 
 ## 라우팅
 
@@ -92,6 +92,8 @@ tailscale serve --bg http://127.0.0.1:8080
 직접 접속하려면 `web-bind`를 해당 서버에 실제 할당된 Tailscale IP로 바꾸고 `http://<tailscale-ip>:8080`으로 접속할 수 있습니다. `0.0.0.0`, `::`, 공인 IP, 일반 LAN 주소는 거부합니다. Tailscale 범위는 [공식 예약 주소](https://tailscale.com/docs/reference/reserved-ip-addresses)의 `100.64.0.0/10`, `fd7a:115c:a1e0::/48`을 사용합니다. 전달된 `X-Forwarded-For`는 접근 제어에 사용하지 않습니다. loopback 접근도 항상 비밀번호가 필요합니다.
 
 웹패널 기능:
+
+- 테마: 우측 상단에서 자동(운영체제 설정), 라이트, 다크를 선택합니다. 선택은 브라우저에 저장되며 로그인 화면과 모든 관리 화면에 적용됩니다.
 
 - 대시보드: 서버별 상태·지연 시간, DB 다운로드 날짜/다음 갱신, fallback 토글, 최근 접속.
 - 서버·라우팅: 기본/fallback 풀, ASN/국가 규칙 추가·수정·삭제.

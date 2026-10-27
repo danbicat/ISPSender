@@ -139,7 +139,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--java", required=True)
     parser.add_argument("--proxy", required=True, type=Path)
-    parser.add_argument("--plugin", type=Path, default=ROOT / "build/libs/ISPSender-1.1.0.jar")
+    parser.add_argument("--plugin", type=Path, default=ROOT / "build/libs/ISPSender-1.1.1.jar")
     parser.add_argument("--workdir", required=True, type=Path, help="New empty directory for disposable test data")
     parser.add_argument("--keep", action="store_true", help="Keep the passing test proxy alive for browser QA")
     args = parser.parse_args()

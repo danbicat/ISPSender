@@ -1,0 +1,4 @@
+ipv4-24.mmdb is the unmodified MaxMind-DB-test-ipv4-24.mmdb test database from
+https://github.com/maxmind/MaxMind-DB/tree/main/test-data
+Copyright MaxMind, Inc. Provided under the Apache License 2.0 (LICENSE-APACHE).
+This synthetic fixture is test-only and is never bundled in the plugin jar.

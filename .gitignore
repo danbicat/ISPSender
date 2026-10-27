@@ -4,3 +4,6 @@ out/
 .idea/
 *.iml
 *.mmdb
+
+# Synthetic MMDB fixture is intentionally versioned for offline tests.
+!src/test/resources/mmdb/ipv4-24.mmdb

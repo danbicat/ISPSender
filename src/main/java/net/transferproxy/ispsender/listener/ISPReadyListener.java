@@ -1,14 +1,15 @@
 package net.transferproxy.ispsender.listener;
 
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.transferproxy.api.event.listener.ReadyListener;
 import net.transferproxy.api.network.connection.PlayerConnection;
-import net.transferproxy.ispsender.config.ISPSenderConfiguration;
+import net.transferproxy.ispsender.config.ConfigurationStore;
 import net.transferproxy.ispsender.database.IPInfoDatabase;
 import net.transferproxy.ispsender.database.IPInfoRecord;
+import net.transferproxy.ispsender.health.HealthMonitor;
+import net.transferproxy.ispsender.logging.ConnectionLogs;
 import net.transferproxy.ispsender.routing.Route;
-import net.transferproxy.ispsender.routing.RoutingTable;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,46 +19,55 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Objects;
 
-/**
- * Looks up the address of every ready connection and transfers it to the matching server.
- */
+/** Looks up the address of every ready connection and transfers it to the matching server. */
 public final class ISPReadyListener implements ReadyListener {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ISPReadyListener.class);
 
     private final IPInfoDatabase database;
-    private final RoutingTable routingTable;
-    private final Component noServerMessage;
-    private final boolean logLookups;
+    private final ConfigurationStore settings;
+    private final HealthMonitor health;
+    private final ConnectionLogs logs;
 
-    public ISPReadyListener(final @NotNull IPInfoDatabase database,
-                            final @NotNull RoutingTable routingTable,
-                            final @NotNull ISPSenderConfiguration config) {
-        this.database = Objects.requireNonNull(database, "database must not be null");
-        this.routingTable = Objects.requireNonNull(routingTable, "routingTable must not be null");
-        Objects.requireNonNull(config, "config must not be null");
-        this.noServerMessage = MiniMessage.miniMessage().deserialize(config.getNoServerMessage());
-        this.logLookups = config.isLogLookups();
+    public ISPReadyListener(
+            IPInfoDatabase database,
+            ConfigurationStore settings,
+            HealthMonitor health,
+            ConnectionLogs logs) {
+        this.database = database;
+        this.settings = settings;
+        this.health = health;
+        this.logs = logs;
     }
 
     @Override
     public void handle(final @NotNull PlayerConnection connection) {
         final InetAddress address = getAddress(connection);
         final IPInfoRecord record = this.database.lookup(address);
-        final Route route = this.routingTable.resolve(record);
+        final ConfigurationStore.Snapshot snapshot = settings.current();
+        final Route route =
+                snapshot.routing()
+                        .resolve(record, health::isAlive, snapshot.config().isFallbackEnabled());
+        logs.record(connection.getName(), address, record, route);
 
         if (route == null) {
-            LOGGER.warn("No server found for {} ({}), the player has been kicked",
+            LOGGER.warn(
+                    "No server found for {} ({}), the player has been kicked",
                     connection.getName(),
                     describe(address, record));
-            connection.disconnect(this.noServerMessage);
+            connection.disconnect(
+                    MiniMessage.miniMessage().deserialize(snapshot.config().getNoServerMessage()));
             return;
         }
 
-        if (this.logLookups) {
-            LOGGER.info("{} ({}) -> {} [{}]", connection.getName(), describe(address, record), route.server(), route.rule());
+        if (snapshot.config().isLogLookups()) {
+            LOGGER.info(
+                    "{} ({}) -> {} [{}]",
+                    connection.getName(),
+                    describe(address, record),
+                    route.server(),
+                    route.rule());
         }
         connection.transfer(route.server().host(), route.server().port());
     }
@@ -70,7 +80,8 @@ public final class ISPReadyListener implements ReadyListener {
             method = PlayerConnection.class.getMethod("getRemoteAddress");
         } catch (final Throwable ignored) {
             try {
-                final Class<?> implClass = Class.forName("net.transferproxy.network.connection.PlayerConnectionImpl");
+                final Class<?> implClass =
+                        Class.forName("net.transferproxy.network.connection.PlayerConnectionImpl");
                 method = implClass.getMethod("getRemoteAddress");
             } catch (final Throwable alsoIgnored) {
             }
@@ -81,7 +92,8 @@ public final class ISPReadyListener implements ReadyListener {
         GET_REMOTE_ADDRESS_METHOD = method;
     }
 
-    private static @Nullable SocketAddress getRemoteSocketAddress(final @NotNull PlayerConnection connection) {
+    private static @Nullable SocketAddress getRemoteSocketAddress(
+            final @NotNull PlayerConnection connection) {
         if (GET_REMOTE_ADDRESS_METHOD != null) {
             try {
                 final Object result = GET_REMOTE_ADDRESS_METHOD.invoke(connection);
@@ -118,9 +130,11 @@ public final class ISPReadyListener implements ReadyListener {
         return null;
     }
 
-    private static @NotNull String describe(final @Nullable InetAddress address, final @Nullable IPInfoRecord record) {
+    private static @NotNull String describe(
+            final @Nullable InetAddress address, final @Nullable IPInfoRecord record) {
         final String host = address != null ? address.getHostAddress() : "unknown address";
-        return record != null ? host + ", " + record.describe() : host + ", not found in the database";
+        return record != null
+                ? host + ", " + record.describe()
+                : host + ", not found in the database";
     }
-
 }

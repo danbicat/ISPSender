@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'net.transferproxy'
-version = '1.0.0'
+version = '1.1.0'
 
 repositories {
     mavenCentral()
@@ -17,6 +17,11 @@ dependencies {
 
     // MMDB reader, shaded into the plugin jar
     implementation 'com.maxmind.db:maxmind-db:4.1.0'
+
+    testImplementation 'com.github.YvanMazy.TransferProxy:api:1.2.1'
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 // Compiles with any JDK >= 17 while still targeting Java 17 like the proxy.
@@ -49,3 +54,5 @@ jar {
 }
 
 build.dependsOn(shadowJar)
+
+test { useJUnitPlatform() }

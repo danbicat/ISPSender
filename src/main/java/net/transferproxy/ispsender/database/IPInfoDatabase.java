@@ -2,6 +2,7 @@ package net.transferproxy.ispsender.database;
 
 import com.maxmind.db.Metadata;
 import com.maxmind.db.Reader;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,9 +19,10 @@ import java.util.Objects;
 
 /**
  * Holds the currently loaded IPinfo database.
- * <p>
- * The reader is always created from an {@link InputStream}, so the database is fully loaded in memory and the file on
- * disk stays free to be replaced by the downloader. Swapping the reader is atomic for the lookup threads.
+ *
+ * <p>The reader is always created from an {@link InputStream}, so the database is fully loaded in
+ * memory and the file on disk stays free to be replaced by the downloader. Swapping the reader is
+ * atomic for the lookup threads.
  */
 public final class IPInfoDatabase implements Closeable {
 
@@ -32,7 +34,6 @@ public final class IPInfoDatabase implements Closeable {
      * Loads a database file in memory and installs it as the active one.
      *
      * @param path the database file
-     *
      * @return true if the database has been loaded
      */
     public boolean loadFrom(final @NotNull Path path) {
@@ -50,9 +51,7 @@ public final class IPInfoDatabase implements Closeable {
      * Reads a database file in memory without installing it, to validate a freshly downloaded file.
      *
      * @param path the database file
-     *
      * @return the opened reader
-     *
      * @throws IOException if the file is missing or is not a valid MMDB file
      */
     public static @NotNull Reader read(final @NotNull Path path) throws IOException {
@@ -66,24 +65,27 @@ public final class IPInfoDatabase implements Closeable {
      *
      * @param newReader the reader to install
      */
-    public void install(final @NotNull Reader newReader) {
+    public synchronized void install(final @NotNull Reader newReader) {
         Objects.requireNonNull(newReader, "newReader must not be null");
         final Reader previous = this.reader;
         this.reader = newReader;
         close(previous);
 
         final Metadata metadata = newReader.getMetadata();
-        LOGGER.info("Loaded database '{}' built on {} ({} nodes)", metadata.databaseType(), metadata.buildTime(), metadata.nodeCount());
+        LOGGER.info(
+                "Loaded database '{}' built on {} ({} nodes)",
+                metadata.databaseType(),
+                metadata.buildTime(),
+                metadata.nodeCount());
     }
 
     /**
      * Looks up an address in the active database.
      *
      * @param address the address to look up
-     *
      * @return the record, or null when the database is not loaded or the address is unknown
      */
-    public @Nullable IPInfoRecord lookup(final @Nullable InetAddress address) {
+    public synchronized @Nullable IPInfoRecord lookup(final @Nullable InetAddress address) {
         final Reader currentReader = this.reader;
         if (currentReader == null || address == null) {
             return null;
@@ -101,7 +103,7 @@ public final class IPInfoDatabase implements Closeable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         final Reader previous = this.reader;
         this.reader = null;
         close(previous);
@@ -117,5 +119,4 @@ public final class IPInfoDatabase implements Closeable {
             LOGGER.warn("Failed to close a database reader", e);
         }
     }
-
 }

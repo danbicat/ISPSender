@@ -1,69 +1,61 @@
-# ------------------------------------------------------------------------------
-#  ISPSender
-#
-#  Looks up the ASN and the country of every incoming connection in the IPinfo
-#  Lite database (downloaded on startup) and transfers the player to the server
-#  configured for that ASN / country.
-#
-#  Rules are evaluated in this order:
-#      asn-servers  ->  country-servers  ->  default-server
-# ------------------------------------------------------------------------------
+# ISPSender 1.1 — ASN -> country -> default -> emergency fallback.
+# Every pool accepts a string or a YAML list. Duplicates add weight.
+# Existing configurations remain compatible; missing keys use these defaults.
 
-# Your IPinfo token (free: https://ipinfo.io/signup).
-# The IPINFO_TOKEN environment variable overrides this value when it is set.
-token: "YOUR_IPINFO_TOKEN"
-
-# Download URL of the database. "{token}" is replaced by the token above.
+token: "YOUR_IPINFO_TOKEN" # IPINFO_TOKEN environment variable takes priority.
 database-url: "https://ipinfo.io/data/ipinfo_lite.mmdb?token={token}"
-
-# File name of the database inside plugins/ISPSender/
 database-file: "ipinfo_lite.mmdb"
 
-# Download a fresh database when the plugin starts.
-# When a database is already present it is loaded first, and the download runs
-# in the background so the proxy is never blocked at startup.
-update-on-start: true
-
-# Re-download the database every X minutes (0 = disabled, 1440 = once a day).
-update-interval-minutes: 0
-
-# HTTP timeouts used by the downloader, in seconds.
+# Download once per date at 00:00 in this timezone. A missing/corrupt DB or a
+# missed day is caught up at startup. Same-day restarts reuse the cached DB.
+# Failed downloads retain the old DB and retry after five minutes.
+database-timezone: "Asia/Seoul"
 connect-timeout-seconds: 15
 read-timeout-seconds: 180
 
-# Logs every lookup: player, IP, ASN, country and the chosen server.
+# Legacy keys are accepted but no longer override the daily update policy.
+update-on-start: true
+update-interval-minutes: 0
+
+# TCP health checks run every 10 seconds on every distinct server (fallback too).
+# Unknown, failed, or stale (>30 seconds) checks are excluded from all pools.
+health-check-timeout-millis: 2000
 log-lookups: true
+# JSONL connection logs are always recorded independently of console logging.
+connection-log-retention-days: 30
 
-# ------------------------------------------------------------------------------
-#  Rules
-#
-#  Server format is "HOST:PORT" (":PORT" may be omitted, 25565 by default).
-#  Every rule takes either a single server or a list of servers; with a list,
-#  one of them is picked at random for each player, which spreads the load.
-#  Listing the same server twice simply doubles its chances.
-# ------------------------------------------------------------------------------
-
-# Key: the ASN, with or without the "AS" prefix ("AS4766" and "4766" are equal).
 asn-servers:
-  "AS4766":                              # Korea Telecom, balanced over 2 servers
+  "AS4766":
     - "kt1.example.com:25565"
     - "kt2.example.com:25565"
-  "AS9318": "lgu.example.com:25565"      # LG U+
-  "AS4837": "cn.example.com:25565"       # China Unicom
-
-# Key: the ISO country code ("KR") or the country name returned by IPinfo
-# ("South Korea"). Both are matched case-insensitively.
+  "AS9318": "lgu.example.com:25565"
 country-servers:
   "KR":
     - "kr1.example.com:25565"
     - "kr2.example.com:25565"
-    - "kr3.example.com:25565"
   "JP": "jp.example.com:25565"
-  "US": "us.example.com:25565"
 
-# Used when no rule above matches, or when the IP could not be resolved.
-# Accepts a list too. Leave it empty ("") to kick the player instead.
-default-server: "global.example.com:25565"
+# Multiple default servers work in the same way as ASN/country pools.
+default-server:
+  - "global1.example.com:25565"
+  - "global2.example.com:25565"
 
-# Kick message used when no server could be resolved (MiniMessage format).
+# Used only after all applicable ordinary pools are unavailable.
+# If disabled, empty or entirely down, the player is kicked instead.
+# Console: fallback on | fallback off | fallback status (persisted to config.yml).
+fallback-enabled: true
+fallback-servers: []
+#  - "backup1.example.com:25565"
+#  - "backup2.example.com:25565"
 no-server-message: "<red>No server is available for your connection."
+
+# Optional private management panel. Configure a password before enabling.
+# Recommended: loopback + `tailscale serve --bg http://127.0.0.1:8080`.
+# Or set web-bind to this host's Tailscale IP for direct tailnet access.
+# Public/wildcard/LAN bind addresses are rejected. Never use Tailscale Funnel.
+# Web listener/password and database-file changes require a proxy restart.
+web-enabled: false
+web-bind: "127.0.0.1"
+web-port: 8080
+# ISPSENDER_WEB_PASSWORD environment variable takes priority. Minimum 12 chars.
+web-password: ""

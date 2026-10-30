@@ -69,6 +69,7 @@ public final class WebPanel implements AutoCloseable {
         this.logs = logs;
         this.onSave = onSave;
         boot = store.current().config();
+        boot.validatePanel();
         validateBind(boot.getWebBind());
         server =
                 HttpServer.create(
@@ -84,13 +85,28 @@ public final class WebPanel implements AutoCloseable {
     }
 
     public static void validateBind(String bind) {
+        validateBindRange(bind);
+        try {
+            InetAddress address = InetAddress.getByName(bind);
+            if (!address.isLoopbackAddress() && NetworkInterface.getByInetAddress(address) == null)
+                throw new IllegalArgumentException(
+                        "web-bind must be loopback or an assigned local Tailscale address");
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Cannot use web-bind", e);
+        }
+    }
+
+    /**
+     * Whether the address is one the panel may ever listen on. Tailscale may not be up yet, so
+     * this doesn't require the address to be assigned to this host right now.
+     */
+    public static void validateBindRange(String bind) {
         try {
             if (!bind.equals("localhost") && !bind.matches("[0-9a-fA-F:.]+"))
                 throw new IllegalArgumentException(
                         "Use a literal Tailscale IP or loopback address");
             InetAddress address = InetAddress.getByName(bind);
-            if (address.isLoopbackAddress()) return;
-            if (!isTailnet(address) || NetworkInterface.getByInetAddress(address) == null)
+            if (!address.isLoopbackAddress() && !isTailnet(address))
                 throw new IllegalArgumentException(
                         "web-bind must be loopback or an assigned local Tailscale address");
         } catch (IOException e) {
@@ -212,7 +228,11 @@ public final class WebPanel implements AutoCloseable {
                         updater.lastSuccess() == null ? null : updater.lastSuccess().toString());
                 respond(exchange, 200, state);
             } else if (path.equals("/api/config") && method.equals("PUT")) {
-                store.save(body(exchange));
+                Map<String, Object> changes = body(exchange);
+                // A new address must work after the restart, or the panel locks itself out.
+                if (changes.get("web-bind") instanceof String bind
+                        && !bind.equals(store.current().config().getWebBind())) validateBind(bind);
+                store.save(changes);
                 onSave.run();
                 respond(exchange, 200, Map.of("saved", true, "restartRequired", restartRequired()));
             } else if (path.equals("/api/logout") && method.equals("POST")) {

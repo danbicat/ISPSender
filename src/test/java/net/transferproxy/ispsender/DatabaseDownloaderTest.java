@@ -12,6 +12,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.net.*;
 import java.nio.file.*;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 class DatabaseDownloaderTest {
@@ -53,6 +56,41 @@ class DatabaseDownloaderTest {
             reply.set(fixture);
             assertTrue(downloader.download(database));
         } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void stalledBodyFailsInsteadOfBlockingTheUpdaterThread() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.setExecutor(Executors.newCachedThreadPool());
+        server.createContext(
+                "/db",
+                exchange -> {
+                    try (exchange) {
+                        exchange.sendResponseHeaders(200, 1000);
+                        exchange.getResponseBody().write(new byte[10]);
+                        exchange.getResponseBody().flush();
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+        server.start();
+        try (var database = new IPInfoDatabase()) {
+            var config = new ISPSenderConfiguration();
+            config.setToken("test-token");
+            config.setReadTimeoutSeconds(1);
+            config.setDatabaseUrl(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/db?token={token}");
+            var downloader = new DatabaseDownloader(config, dir.resolve("stalled.mmdb"));
+            assertFalse(
+                    assertTimeoutPreemptively(
+                            Duration.ofSeconds(15), () -> downloader.download(database)));
+            assertFalse(Files.exists(dir.resolve("stalled.mmdb")));
+        } finally {
+            release.countDown();
             server.stop(0);
         }
     }

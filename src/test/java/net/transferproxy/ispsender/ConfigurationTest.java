@@ -85,4 +85,35 @@ class ConfigurationTest {
             c.validate();
         }
     }
+
+    @Test
+    void panelProblemsDoNotStopRoutingOrConsoleCommands() throws Exception {
+        var config = new ISPSenderConfiguration();
+        config.setWebEnabled(true);
+        config.setWebPassword("short");
+        // A Tailscale address that isn't assigned here, like right after a reboot.
+        config.setWebBind("100.100.100.100");
+        var store = new ConfigurationStore(dir.resolve("config.yml"), config);
+        assertNotNull(store.current().routing());
+        store.save(Map.of("fallback-enabled", false));
+        assertFalse(store.current().config().isFallbackEnabled());
+        // Still refused: changing panel settings to something unsafe.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.save(Map.of("web-bind", "0.0.0.0", "web-password", "long-enough-pw-1")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.save(Map.of("web-bind", "127.0.0.1", "web-password", "short2")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new net.transferproxy.ispsender.web.WebPanel(store, null, null, null, null, null));
+    }
+
+    @Test
+    void databaseCannotReplaceTheConfig() throws Exception {
+        var store = new ConfigurationStore(dir.resolve("config.yml"), new ISPSenderConfiguration());
+        for (String name : new String[] {"config.yml", "CONFIG.YML"})
+            assertThrows(
+                    IllegalArgumentException.class, () -> store.save(Map.of("database-file", name)));
+    }
 }

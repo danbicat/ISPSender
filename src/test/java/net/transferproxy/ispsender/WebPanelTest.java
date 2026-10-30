@@ -126,6 +126,12 @@ class WebPanelTest {
                     send(client, base, "/api/config", "PUT", "{\"web-bind\":\"0.0.0.0\"}", csrf)
                             .statusCode());
             assertEquals("127.0.0.1", store.current().config().getWebBind());
+            // Valid range, but saving it would lock the panel out after the restart.
+            assertEquals(
+                    400,
+                    send(client, base, "/api/config", "PUT", "{\"web-bind\":\"100.100.100.100\"}", csrf)
+                            .statusCode());
+            assertEquals("127.0.0.1", store.current().config().getWebBind());
             logs.record("<script>alert(1)</script>", InetAddress.getLoopbackAddress(), null, null);
             logs.close();
             String day = LocalDate.now(ZoneId.of("Asia/Seoul")).toString();

@@ -47,12 +47,19 @@ public final class ISPSenderConfiguration {
     }
 
     public void validate() {
+        validateCore();
+        validatePanel();
+    }
+
+    /** Everything routing needs; a panel problem must not stop routing or the fallback command. */
+    public void validateCore() {
         ZoneId.of(databaseTimezone);
         if (databaseFile == null
                 || databaseFile.isBlank()
                 || java.nio.file.Path.of(databaseFile).isAbsolute()
                 || databaseFile.contains("/")
                 || databaseFile.contains("\\")
+                || databaseFile.equalsIgnoreCase("config.yml")
                 || databaseFile.equals(".")
                 || databaseFile.equals(".."))
             throw new IllegalArgumentException(
@@ -72,10 +79,14 @@ public final class ISPSenderConfiguration {
             throw new IllegalArgumentException("connection-log-retention-days must be 1..365");
         if (noServerMessage == null || webBind == null || webPassword == null)
             throw new IllegalArgumentException("Message, bind address and password cannot be null");
-        if (webEnabled && (resolveWebPassword() == null || resolveWebPassword().length() < 12))
+    }
+
+    public void validatePanel() {
+        if (!webEnabled) return;
+        if (resolveWebPassword() == null || resolveWebPassword().length() < 12)
             throw new IllegalArgumentException(
                     "Set a web password of at least 12 characters (or ISPSENDER_WEB_PASSWORD)");
-        if (webEnabled) net.transferproxy.ispsender.web.WebPanel.validateBind(webBind);
+        net.transferproxy.ispsender.web.WebPanel.validateBindRange(webBind);
     }
 
     public String getToken() {

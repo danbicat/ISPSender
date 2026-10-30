@@ -112,7 +112,10 @@ public final class ISPSenderPlugin implements Plugin {
                         config.getWebBind(),
                         config.getWebPort());
             } catch (Exception e) {
-                LOGGER.error("Cannot start web panel ({})", e.getClass().getSimpleName());
+                LOGGER.error(
+                        "Cannot start web panel ({}: {})",
+                        e.getClass().getSimpleName(),
+                        e.getMessage());
             }
         }
         LOGGER.info(

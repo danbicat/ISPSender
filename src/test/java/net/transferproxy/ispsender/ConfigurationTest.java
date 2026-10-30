@@ -108,4 +108,12 @@ class ConfigurationTest {
                 IllegalArgumentException.class,
                 () -> new net.transferproxy.ispsender.web.WebPanel(store, null, null, null, null, null));
     }
+
+    @Test
+    void databaseCannotReplaceTheConfig() throws Exception {
+        var store = new ConfigurationStore(dir.resolve("config.yml"), new ISPSenderConfiguration());
+        for (String name : new String[] {"config.yml", "CONFIG.YML"})
+            assertThrows(
+                    IllegalArgumentException.class, () -> store.save(Map.of("database-file", name)));
+    }
 }

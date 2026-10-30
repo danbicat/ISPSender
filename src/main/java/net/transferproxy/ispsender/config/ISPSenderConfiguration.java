@@ -59,6 +59,7 @@ public final class ISPSenderConfiguration {
                 || java.nio.file.Path.of(databaseFile).isAbsolute()
                 || databaseFile.contains("/")
                 || databaseFile.contains("\\")
+                || databaseFile.equalsIgnoreCase("config.yml")
                 || databaseFile.equals(".")
                 || databaseFile.equals(".."))
             throw new IllegalArgumentException(

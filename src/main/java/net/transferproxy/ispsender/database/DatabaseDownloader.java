@@ -22,6 +22,10 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -112,14 +116,32 @@ public final class DatabaseDownloader {
                         .build();
 
         final long start = System.nanoTime();
-        final HttpResponse<Path> response =
-                this.client.send(
+        // HttpRequest.timeout stops at the response headers: a stalled body would block forever.
+        final CompletableFuture<HttpResponse<Path>> pending =
+                this.client.sendAsync(
                         request,
                         HttpResponse.BodyHandlers.ofFile(
                                 temporary,
                                 StandardOpenOption.CREATE,
                                 StandardOpenOption.WRITE,
                                 StandardOpenOption.TRUNCATE_EXISTING));
+        final HttpResponse<Path> response;
+        try {
+            response =
+                    pending.get(Math.max(1, this.config.getReadTimeoutSeconds()), TimeUnit.SECONDS);
+        } catch (final TimeoutException e) {
+            pending.cancel(true);
+            LOGGER.error(
+                    "Database download did not finish in {}s",
+                    this.config.getReadTimeoutSeconds());
+            return false;
+        } catch (final InterruptedException e) {
+            pending.cancel(true);
+            throw e;
+        } catch (final ExecutionException e) {
+            if (e.getCause() instanceof IOException cause) throw cause;
+            throw new IOException(e.getCause());
+        }
 
         if (response.statusCode() != 200) {
             LOGGER.error("Database download failed with HTTP {}", response.statusCode());

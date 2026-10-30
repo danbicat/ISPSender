@@ -18,7 +18,8 @@ public final class ConfigurationStore {
 
     public ConfigurationStore(Path path, ISPSenderConfiguration config) {
         this.path = path;
-        config.validate();
+        // The panel validates its own settings when it starts.
+        config.validateCore();
         current = new Snapshot(config, RoutingTable.build(config));
     }
 
@@ -51,7 +52,12 @@ public final class ConfigurationStore {
         ISPSenderConfiguration next =
                 ResourceUtil.getDefaultYamlMapper()
                         .convertValue(values, ISPSenderConfiguration.class);
-        next.validate();
+        next.validateCore();
+        ISPSenderConfiguration previous = current.config();
+        if (next.isWebEnabled() != previous.isWebEnabled()
+                || !Objects.equals(next.getWebBind(), previous.getWebBind())
+                || !Objects.equals(next.getWebPassword(), previous.getWebPassword()))
+            next.validatePanel();
         validateRoutes(next);
         RoutingTable routing = RoutingTable.build(next);
         if (routing.allServers().size() > 4096)

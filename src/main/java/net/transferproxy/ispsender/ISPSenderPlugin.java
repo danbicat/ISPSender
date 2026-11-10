@@ -4,8 +4,10 @@ import net.transferproxy.api.event.EventType;
 import net.transferproxy.api.event.listener.ReadyListener;
 import net.transferproxy.api.plugin.Plugin;
 import net.transferproxy.api.terminal.BaseTerminalExecutor;
+import net.transferproxy.ispsender.alert.DiscordNotifier;
 import net.transferproxy.ispsender.config.*;
 import net.transferproxy.ispsender.database.*;
+import net.transferproxy.ispsender.dns.SrvResolver;
 import net.transferproxy.ispsender.health.HealthMonitor;
 import net.transferproxy.ispsender.listener.ISPReadyListener;
 import net.transferproxy.ispsender.logging.ConnectionLogs;
@@ -23,6 +25,7 @@ public final class ISPSenderPlugin implements Plugin {
     private final IPInfoDatabase database = new IPInfoDatabase();
     private ConfigurationStore settings;
     private DailyDatabaseUpdater updater;
+    private DiscordNotifier notifier;
     private HealthMonitor health;
     private ConnectionLogs logs;
     private WebPanel panel;
@@ -42,10 +45,21 @@ public final class ISPSenderPlugin implements Plugin {
                                 new DatabaseDownloader(settings.current().config(), databasePath)
                                         .download(database));
         if (!database.isLoaded()) updater.invalidate();
+        notifier =
+                new DiscordNotifier(
+                        () -> settings.current().config().isDiscordAlertsEnabled(),
+                        () -> settings.current().config().resolveDiscordWebhook());
         health =
                 new HealthMonitor(
                         () -> settings.current().routing().allServers(),
-                        () -> settings.current().config().getHealthCheckTimeoutMillis());
+                        () -> settings.current().config().getHealthCheckTimeoutMillis(),
+                        () -> settings.current().config().healthMode(),
+                        () -> settings.current().config().getHealthFailureThreshold(),
+                        new SrvResolver(),
+                        (server, alive, reason) -> {
+                            if (alive) notifier.serverUp(server);
+                            else notifier.serverDown(server, reason);
+                        });
         logs =
                 new ConnectionLogs(
                         getDirectoryPath().resolve("connection-logs"),
@@ -55,7 +69,9 @@ public final class ISPSenderPlugin implements Plugin {
         updater.start();
         getEventManager()
                 .<ReadyListener>addListener(
-                        EventType.READY, new ISPReadyListener(database, settings, health, logs));
+                        EventType.READY,
+                        new ISPReadyListener(
+                                database, settings, health, logs, notifier::noRoute));
         if (getModuleManager().getTerminalExecutor() instanceof BaseTerminalExecutor terminal) {
             terminal.register(
                     "fallback",
@@ -70,14 +86,7 @@ public final class ISPSenderPlugin implements Plugin {
                             return;
                         }
                         try {
-                            ISPSenderConfiguration next =
-                                    net.transferproxy.api.util.ResourceUtil.readYaml(
-                                            getConfigPath(), ISPSenderConfiguration.class);
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> values =
-                                    net.transferproxy.api.util.ResourceUtil.getDefaultYamlMapper()
-                                            .convertValue(next, Map.class);
-                            settings.save(values);
+                            settings.reload();
                             health.refresh();
                             updater.checkSoon();
                             LOGGER.info(
@@ -144,6 +153,7 @@ public final class ISPSenderPlugin implements Plugin {
     public void onDisable() {
         if (panel != null) panel.close();
         if (health != null) health.close();
+        if (notifier != null) notifier.close();
         if (updater != null) updater.close();
         if (logs != null) logs.close();
         database.close();

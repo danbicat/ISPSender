@@ -1,4 +1,4 @@
-# ISPSender 1.1 — ASN -> country -> default -> emergency fallback.
+# ISPSender 1.2 — ASN -> country -> default -> emergency fallback.
 # Every pool accepts a string or a YAML list. Duplicates add weight.
 # Existing configurations remain compatible; missing keys use these defaults.
 
@@ -17,9 +17,14 @@ read-timeout-seconds: 180
 update-on-start: true
 update-interval-minutes: 0
 
-# TCP health checks run every 10 seconds on every distinct server (fallback too).
+# Health checks run every 10 seconds on every distinct server (fallback too).
+# minecraft sends a Minecraft status request and needs a status reply (recommended).
+# tcp only checks that the port accepts connections; use it for non-Minecraft targets.
 # Unknown, failed, or stale (>30 seconds) checks are excluded from all pools.
+health-check-mode: "minecraft"
 health-check-timeout-millis: 2000
+# A server leaves the pools after this many consecutive failed checks (1-10).
+health-failure-threshold: 2
 log-lookups: true
 # JSONL connection logs are always recorded independently of console logging.
 connection-log-retention-days: 30
@@ -48,6 +53,12 @@ fallback-servers: []
 #  - "backup1.example.com:25565"
 #  - "backup2.example.com:25565"
 no-server-message: "<red>No server is available for your connection."
+
+# Discord alerts for servers going down or back up, and for players with no route.
+# Messages never mention anyone. ISPSENDER_DISCORD_WEBHOOK takes priority over the URL.
+# A blank value keeps the saved URL; use discord-alerts-enabled: false to stop alerts.
+discord-alerts-enabled: false
+discord-webhook-url: ""
 
 # Optional private management panel. Configure a password before enabling.
 # Recommended: loopback + `tailscale serve --bg http://127.0.0.1:8080`.

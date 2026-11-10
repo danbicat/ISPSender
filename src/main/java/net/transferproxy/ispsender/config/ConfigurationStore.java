@@ -36,6 +36,7 @@ public final class ConfigurationStore {
         if (redact) {
             values.put("token", "");
             values.put("web-password", "");
+            values.put("discord-webhook-url", "");
         }
         return values;
     }
@@ -47,13 +48,33 @@ public final class ConfigurationStore {
                 throw new IllegalArgumentException("Unknown setting: " + entry.getKey());
             if ((entry.getKey().equals("token") || entry.getKey().equals("web-password"))
                     && "".equals(entry.getValue())) continue;
+            // A blank webhook keeps the saved one, like the token.
+            if (entry.getKey().equals("discord-webhook-url")
+                    && (entry.getValue() == null || "".equals(entry.getValue()))) continue;
             values.put(entry.getKey(), entry.getValue());
         }
+        return commit(values);
+    }
+
+    /**
+     * Applies config.yml exactly as written. Unlike {@link #save}, a blank secret in the file stays
+     * blank, and nothing from the active configuration is merged in.
+     */
+    @SuppressWarnings("unchecked")
+    public synchronized Snapshot reload() throws IOException {
+        ISPSenderConfiguration fromFile = ResourceUtil.readYaml(path, ISPSenderConfiguration.class);
+        return commit(ResourceUtil.getDefaultYamlMapper().convertValue(fromFile, Map.class));
+    }
+
+    private Snapshot commit(Map<String, Object> values) throws IOException {
         ISPSenderConfiguration next =
                 ResourceUtil.getDefaultYamlMapper()
                         .convertValue(values, ISPSenderConfiguration.class);
         next.validateCore();
         ISPSenderConfiguration previous = current.config();
+        // Only a changed webhook is checked, so an old bad value never blocks other saves.
+        if (!Objects.equals(next.getDiscordWebhookUrl(), previous.getDiscordWebhookUrl()))
+            next.validateAlerts();
         if (next.isWebEnabled() != previous.isWebEnabled()
                 || !Objects.equals(next.getWebBind(), previous.getWebBind())
                 || !Objects.equals(next.getWebPassword(), previous.getWebPassword()))

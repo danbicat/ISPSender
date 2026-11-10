@@ -4,6 +4,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.transferproxy.api.event.listener.ReadyListener;
 import net.transferproxy.api.network.connection.PlayerConnection;
 import net.transferproxy.ispsender.config.ConfigurationStore;
+import net.transferproxy.ispsender.data.Server;
 import net.transferproxy.ispsender.database.IPInfoDatabase;
 import net.transferproxy.ispsender.database.IPInfoRecord;
 import net.transferproxy.ispsender.health.HealthMonitor;
@@ -29,16 +30,19 @@ public final class ISPReadyListener implements ReadyListener {
     private final ConfigurationStore settings;
     private final HealthMonitor health;
     private final ConnectionLogs logs;
+    private final Runnable onNoRoute;
 
     public ISPReadyListener(
             IPInfoDatabase database,
             ConfigurationStore settings,
             HealthMonitor health,
-            ConnectionLogs logs) {
+            ConnectionLogs logs,
+            Runnable onNoRoute) {
         this.database = database;
         this.settings = settings;
         this.health = health;
         this.logs = logs;
+        this.onNoRoute = onNoRoute;
     }
 
     @Override
@@ -56,20 +60,35 @@ public final class ISPReadyListener implements ReadyListener {
                     "No server found for {} ({}), the player has been kicked",
                     connection.getName(),
                     describe(address, record));
+            notifyNoRoute();
             connection.disconnect(
                     MiniMessage.miniMessage().deserialize(snapshot.config().getNoServerMessage()));
             return;
         }
 
+        // Reads the cached SRV target only: the player thread never does DNS.
+        final Server target = health.target(route.server());
         if (snapshot.config().isLogLookups()) {
             LOGGER.info(
                     "{} ({}) -> {} [{}]",
                     connection.getName(),
                     describe(address, record),
-                    route.server(),
+                    describeTarget(route.server(), target),
                     route.rule());
         }
-        connection.transfer(route.server().host(), route.server().port());
+        connection.transfer(target.host(), target.port());
+    }
+
+    private void notifyNoRoute() {
+        try {
+            onNoRoute.run();
+        } catch (final RuntimeException e) {
+            LOGGER.warn("No-route alert failed ({})", e.getClass().getSimpleName());
+        }
+    }
+
+    private static String describeTarget(final Server configured, final Server target) {
+        return configured.equals(target) ? configured.toString() : configured + " (" + target + ")";
     }
 
     private static final Method GET_REMOTE_ADDRESS_METHOD;

@@ -10,8 +10,10 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -148,6 +150,54 @@ public final class RoutingTable {
         Route route = route(defaultServers, "default", available);
         if (route != null) return route;
         return fallbackEnabled ? route(fallbackServers, "fallback", available) : null;
+    }
+
+    /** One rule in resolution order, with its servers and the ones currently available. */
+    public record Step(
+            String rule, List<String> servers, List<String> available, boolean selected) {}
+
+    /**
+     * The same order as {@link #resolve}, for the simulator. Only rules with a configured pool are
+     * listed, and the first one with an available server is marked as selected.
+     */
+    public List<Step> explain(
+            final @Nullable IPInfoRecord record,
+            final Predicate<Server> available,
+            final boolean fallbackEnabled) {
+        final List<Step> steps = new ArrayList<>();
+        if (record != null) {
+            addStep(
+                    steps,
+                    asnServers.get(record.asnNumber()),
+                    "AS" + record.asnNumber(),
+                    available);
+            addStep(
+                    steps,
+                    countryPool(record.countryCode()),
+                    "country " + record.countryCode(),
+                    available);
+            addStep(
+                    steps,
+                    countryPool(record.country()),
+                    "country " + record.country(),
+                    available);
+        }
+        addStep(steps, defaultServers, "default", available);
+        if (fallbackEnabled) addStep(steps, fallbackServers, "fallback", available);
+        return List.copyOf(steps);
+    }
+
+    private static void addStep(
+            final List<Step> steps,
+            final @Nullable ServerPool pool,
+            final String rule,
+            final Predicate<Server> available) {
+        if (pool == null) return;
+        final List<String> all = pool.servers().stream().map(Server::toString).toList();
+        final List<String> alive =
+                pool.servers().stream().filter(available).map(Server::toString).toList();
+        final boolean selected = !alive.isEmpty() && steps.stream().noneMatch(Step::selected);
+        steps.add(new Step(rule, all, alive, selected));
     }
 
     private ServerPool countryPool(String value) {

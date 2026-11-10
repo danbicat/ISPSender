@@ -24,19 +24,26 @@
     if (preference === "system") apply();
   });
   document.addEventListener("DOMContentLoaded", () => {
-    const picker = document.getElementById("theme");
-    picker.value = preference;
-    picker.addEventListener("change", () => {
-      preference = allowed.has(picker.value) ? picker.value : "system";
-      try {
-        localStorage.setItem(key, preference);
-      } catch (_) {}
-      apply();
-    });
+    // The picker is a segmented control of radios named "theme-choice".
+    const choices = document.querySelectorAll('input[name="theme-choice"]');
+    const sync = () => {
+      for (const choice of choices) choice.checked = choice.value === preference;
+    };
+    sync();
+    for (const choice of choices) {
+      choice.addEventListener("change", () => {
+        if (!choice.checked) return;
+        preference = allowed.has(choice.value) ? choice.value : "system";
+        try {
+          localStorage.setItem(key, preference);
+        } catch (_) {}
+        apply();
+      });
+    }
     window.addEventListener("storage", (event) => {
       if (event.key !== key) return;
       preference = allowed.has(event.newValue) ? event.newValue : "system";
-      picker.value = preference;
+      sync();
       apply();
     });
   });

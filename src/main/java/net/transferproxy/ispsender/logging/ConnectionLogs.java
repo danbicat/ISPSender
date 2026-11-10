@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.nio.file.*;
 import java.time.*;
@@ -120,15 +121,135 @@ public final class ConnectionLogs implements AutoCloseable {
     }
 
     public List<Entry> read(LocalDate day, int offset, int limit) throws IOException {
+        return read(day, offset, limit, null);
+    }
+
+    /**
+     * Reads one page of a day. A non-blank query keeps only the rows that contain it, ignoring case,
+     * before the offset and limit are applied, so paging works over the matching rows.
+     */
+    public List<Entry> read(LocalDate day, int offset, int limit, String query)
+            throws IOException {
         Path path = file(day);
         if (!Files.isRegularFile(path)) return List.of();
+        String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         try (var lines = Files.lines(path)) {
             return lines.map(ConnectionLogs::decode)
                     .filter(Objects::nonNull)
+                    .filter(entry -> needle.isEmpty() || matchesQuery(entry, needle))
                     .skip(Math.max(0, offset))
                     .limit(Math.min(500, Math.max(1, limit)))
                     .toList();
         }
+    }
+
+    private static boolean matchesQuery(Entry entry, String needle) {
+        return containsIgnoreCase(entry.player(), needle)
+                || containsIgnoreCase(entry.ip(), needle)
+                || containsIgnoreCase(entry.asn(), needle)
+                || containsIgnoreCase(entry.country(), needle)
+                || containsIgnoreCase(entry.server(), needle)
+                || containsIgnoreCase(entry.rule(), needle)
+                || containsIgnoreCase(entry.result(), needle);
+    }
+
+    private static boolean containsIgnoreCase(String value, String needle) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    /** Transferred and kicked counts for one key. */
+    public record Bucket(String key, long transferred, long kicked) {}
+
+    /** Totals of the range, one bucket per day (oldest first) and the top ten per dimension. */
+    public record Stats(
+            String from,
+            String to,
+            long transferred,
+            long kicked,
+            List<Bucket> days,
+            List<Bucket> asn,
+            List<Bucket> country,
+            List<Bucket> server) {}
+
+    /**
+     * Totals for the days ending on {@code to}. The range is clamped to 1..31 days. Each day file is
+     * streamed line by line, so memory stays bounded by the number of distinct keys.
+     */
+    public Stats stats(LocalDate to, int days) {
+        int span = Math.max(1, Math.min(31, days));
+        LocalDate from = to.minusDays(span - 1L);
+        List<Bucket> daily = new ArrayList<>();
+        Map<String, long[]> asn = new HashMap<>();
+        Map<String, long[]> country = new HashMap<>();
+        Map<String, long[]> server = new HashMap<>();
+        long transferred = 0;
+        long kicked = 0;
+        for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
+            long[] totals = new long[2];
+            Path path = file(day);
+            if (Files.isRegularFile(path)) {
+                try (var lines = Files.lines(path)) {
+                    lines.map(ConnectionLogs::decode)
+                            .filter(Objects::nonNull)
+                            .forEach(entry -> tally(entry, totals, asn, country, server));
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
+            daily.add(new Bucket(day.toString(), totals[0], totals[1]));
+            transferred += totals[0];
+            kicked += totals[1];
+        }
+        return new Stats(
+                from.toString(),
+                to.toString(),
+                transferred,
+                kicked,
+                List.copyOf(daily),
+                top(asn),
+                top(country),
+                top(server));
+    }
+
+    private static void tally(
+            Entry entry,
+            long[] totals,
+            Map<String, long[]> asn,
+            Map<String, long[]> country,
+            Map<String, long[]> server) {
+        int slot;
+        if ("transferred".equals(entry.result())) {
+            slot = 0;
+        } else if ("kicked".equals(entry.result())) {
+            slot = 1;
+        } else {
+            return;
+        }
+        totals[slot]++;
+        count(asn, orUnknown(entry.asn()), slot);
+        count(country, orUnknown(entry.country()), slot);
+        if (entry.server() != null && !entry.server().isBlank()) {
+            count(server, entry.server(), slot);
+        }
+    }
+
+    private static void count(Map<String, long[]> counts, String key, int slot) {
+        counts.computeIfAbsent(key, unused -> new long[2])[slot]++;
+    }
+
+    private static String orUnknown(String value) {
+        return value == null || value.isBlank() ? "unknown" : value;
+    }
+
+    private static List<Bucket> top(Map<String, long[]> counts) {
+        return counts.entrySet().stream()
+                .map(e -> new Bucket(e.getKey(), e.getValue()[0], e.getValue()[1]))
+                .sorted(
+                        Comparator.comparingLong((Bucket b) -> b.transferred() + b.kicked())
+                                .reversed()
+                                .thenComparing(Bucket::key))
+                .limit(10)
+                .toList();
     }
 
     private static Entry decode(String line) {

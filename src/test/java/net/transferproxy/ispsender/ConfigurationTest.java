@@ -110,6 +110,89 @@ class ConfigurationTest {
     }
 
     @Test
+    void webhookIsRedactedValidatedOnlyWhenChangedAndNeverStopsRouting() throws Exception {
+        var config = new ISPSenderConfiguration();
+        config.setDiscordAlertsEnabled(true);
+        // A bad alert URL already on disk must not stop startup or routing.
+        config.setDiscordWebhookUrl("not a webhook");
+        config.validate();
+        var store = new ConfigurationStore(dir.resolve("config.yml"), config);
+        assertNotNull(store.current().routing());
+        store.save(Map.of("fallback-enabled", false));
+        assertFalse(store.current().config().isFallbackEnabled());
+        assertEquals("", store.values(true).get("discord-webhook-url"));
+        var rejected =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                store.save(
+                                        Map.of(
+                                                "discord-webhook-url",
+                                                "https://evil.example/api/webhooks/1/secret-token")));
+        assertFalse(rejected.getMessage().contains("evil.example"));
+        assertFalse(rejected.getMessage().contains("secret-token"));
+        store.save(Map.of("discord-webhook-url", ""));
+        assertEquals("not a webhook", store.current().config().getDiscordWebhookUrl());
+        String valid = "https://discordapp.com/api/v10/webhooks/123/abc_DEF-1";
+        store.save(Map.of("discord-webhook-url", valid));
+        assertEquals(valid, store.current().config().getDiscordWebhookUrl());
+        assertEquals("", store.values(true).get("discord-webhook-url"));
+        assertTrue(Files.readString(dir.resolve("config.yml")).contains("abc_DEF-1"));
+    }
+
+    @Test
+    void reloadAppliesTheFileAsWrittenSoABlankSecretStaysBlank() throws Exception {
+        var config = new ISPSenderConfiguration();
+        config.setDiscordAlertsEnabled(true);
+        config.setToken("private-token");
+        Path path = dir.resolve("config.yml");
+        var store = new ConfigurationStore(path, config);
+        store.save(
+                Map.of(
+                        "discord-webhook-url",
+                        "https://discordapp.com/api/v10/webhooks/123/abc_DEF-1"));
+        assertTrue(Files.readString(path).contains("abc_DEF-1"));
+        // The operator blanks the webhook and token in config.yml, then runs `ispsender reload`.
+        var edited = ResourceUtil.readYaml(path, ISPSenderConfiguration.class);
+        edited.setDiscordWebhookUrl("");
+        edited.setToken("");
+        edited.setFallbackEnabled(false);
+        Files.writeString(path, ResourceUtil.getDefaultYamlMapper().writeValueAsString(edited));
+        store.reload();
+        assertEquals("", store.current().config().getDiscordWebhookUrl());
+        assertEquals("", store.current().config().getToken());
+        assertFalse(store.current().config().isFallbackEnabled());
+        String onDisk = Files.readString(path);
+        assertFalse(onDisk.contains("abc_DEF-1"));
+        assertFalse(onDisk.contains("private-token"));
+        var reread = ResourceUtil.readYaml(path, ISPSenderConfiguration.class);
+        assertEquals("", reread.getDiscordWebhookUrl());
+    }
+
+    @Test
+    void healthModeAndFailureThresholdAreValidatedBeforeTheyApply() throws Exception {
+        var store = new ConfigurationStore(dir.resolve("config.yml"), new ISPSenderConfiguration());
+        assertEquals(
+                net.transferproxy.ispsender.health.HealthMonitor.Mode.MINECRAFT,
+                store.current().config().healthMode());
+        assertEquals(2, store.current().config().getHealthFailureThreshold());
+        store.save(Map.of("health-check-mode", "TCP", "health-failure-threshold", 3));
+        assertEquals(
+                net.transferproxy.ispsender.health.HealthMonitor.Mode.TCP,
+                store.current().config().healthMode());
+        assertEquals(3, store.current().config().getHealthFailureThreshold());
+        assertThrows(
+                IllegalArgumentException.class, () -> store.save(Map.of("health-check-mode", "udp")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.save(Map.of("health-failure-threshold", 0)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.save(Map.of("health-failure-threshold", 11)));
+        assertEquals(3, store.current().config().getHealthFailureThreshold());
+    }
+
+    @Test
     void databaseCannotReplaceTheConfig() throws Exception {
         var store = new ConfigurationStore(dir.resolve("config.yml"), new ISPSenderConfiguration());
         for (String name : new String[] {"config.yml", "CONFIG.YML"})

@@ -108,6 +108,64 @@ def read_varint(stream):
     raise ValueError("Invalid VarInt")
 
 
+def encode_name(name):
+    """DNS wire format for a dotted name."""
+    data = bytearray()
+    for label in name.rstrip(".").split("."):
+        data.append(len(label))
+        data += label.encode("ascii")
+    data.append(0)
+    return bytes(data)
+
+
+class StubDns:
+    """Loopback UDP DNS: SRV for one name, no data for other types, NXDOMAIN for other names."""
+
+    def __init__(self, name, target, srv_port):
+        self.name = name.lower()
+        self.target = target
+        self.srv_port = srv_port
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.port = self.sock.getsockname()[1]
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        while True:
+            try:
+                request, peer = self.sock.recvfrom(512)
+            except OSError:
+                return
+            try:
+                reply = self.answer(request)
+                self.sock.sendto(reply, peer)
+            except (IndexError, struct.error, UnicodeDecodeError):
+                continue
+            except OSError:
+                return
+
+    def answer(self, request):
+        position = 12
+        labels = []
+        while request[position] != 0:
+            length = request[position]
+            labels.append(request[position + 1:position + 1 + length].decode("ascii"))
+            position += 1 + length
+        qtype, _ = struct.unpack(">HH", request[position + 1:position + 5])
+        question = request[12:position + 5]
+        known = ".".join(labels).lower() == self.name
+        answer = b""
+        if known and qtype == 33:
+            rdata = struct.pack(">HHH", 0, 0, self.srv_port) + encode_name(self.target)
+            answer = b"\xc0\x0c" + struct.pack(">HHIH", 33, 1, 60, len(rdata)) + rdata
+        flags = 0x8400 if known else 0x8403
+        header = request[:2] + struct.pack(">HHHHH", flags, 1, 1 if answer else 0, 0, 0)
+        return header + question + answer
+
+    def close(self):
+        self.sock.close()
+
+
 def player(proxy_port, name):
     with socket.create_connection(("127.0.0.1", proxy_port), timeout=5) as sock:
         stream = sock.makefile("rb")
@@ -139,7 +197,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--java", required=True)
     parser.add_argument("--proxy", required=True, type=Path)
-    parser.add_argument("--plugin", type=Path, default=ROOT / "build/libs/ISPSender-1.1.1.jar")
+    parser.add_argument("--plugin", type=Path, default=ROOT / "build/libs/ISPSender-1.2.0.jar")
     parser.add_argument("--workdir", required=True, type=Path, help="New empty directory for disposable test data")
     parser.add_argument("--keep", action="store_true", help="Keep the passing test proxy alive for browser QA")
     args = parser.parse_args()
@@ -169,11 +227,14 @@ def main():
     db_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), DatabaseHandler)
     threading.Thread(target=db_server.serve_forever, daemon=True).start()
     targets = [Target() for _ in range(3)]
+    # Answers the SRV lookups of srv-only.test with the first fake backend.
+    dns = StubDns("_minecraft._tcp.srv-only.test", "localhost", targets[0].port)
     cfg = {
         "token": "test-token", "database-url": f"http://127.0.0.1:{db_server.server_port}/db?token={{token}}",
         "default-server": [targets[0].address, targets[1].address], "asn-servers": {}, "country-servers": {},
         "fallback-servers": [targets[2].address], "fallback-enabled": True,
         "web-enabled": True, "web-bind": "127.0.0.1", "web-port": web_port, "web-password": PASSWORD,
+        "health-check-mode": "tcp", "health-failure-threshold": 1,
     }
     # JSON is valid YAML and is read by the proxy's real YAML mapper.
     (plugin_dir / "config.yml").write_text(json.dumps(cfg))
@@ -198,7 +259,7 @@ def main():
 
     def start():
         nonlocal proxy, csrf
-        proxy = subprocess.Popen([args.java, "-jar", str(args.proxy.resolve())], cwd=work, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.STDOUT, text=True)
+        proxy = subprocess.Popen([args.java, f"-Dispsender.dns.server=dns://127.0.0.1:{dns.port}", "-jar", str(args.proxy.resolve())], cwd=work, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.STDOUT, text=True)
         wait_for(lambda: urllib.request.urlopen(base, timeout=1).status == 200, "web listener startup")
         csrf = request("/api/login", {"password": PASSWORD})["csrf"]
         wait_for(lambda: all(s["alive"] for s in state()["servers"]), "initial health checks")
@@ -252,6 +313,11 @@ def main():
         wait_for(lambda: all(s["alive"] for s in state()["servers"]), "server recovery")
         assert player(proxy_port, "Recovered")[1] in {t.port for t in targets[:2]}
         print("PASS: all-down kick and automatic recovery", flush=True)
+        # An SRV-only domain: the probe follows the SRV record and the transfer carries its target.
+        save({"default-server": ["srv-only.test"]})
+        wait_for(lambda: any(s["server"] == "srv-only.test:25565" and s["alive"] for s in state()["servers"]), "SRV-only default server alive")
+        assert player(proxy_port, "SrvOnly") == ("localhost", targets[0].port), "transfer must carry the SRV target"
+        print("PASS: SRV-only domain is probed and transfers to its SRV target and port", flush=True)
         stop(); start()
         assert len(downloads) == 0, "Same-day restart downloaded the DB"
         assert request(f"/api/logs?date={today}"), "Historical logs lost on restart"
@@ -270,6 +336,7 @@ def main():
         for t in targets:
             t.close()
         db_server.shutdown()
+        dns.close()
         output.close()
 
 

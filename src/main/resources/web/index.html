@@ -2,257 +2,483 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>ISPSender · Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ISPSender</title>
     <script src="/theme.js"></script>
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <div class="theme-control">
-      <label for="theme" class="visually-hidden">화면 테마</label
-      ><select id="theme" aria-label="화면 테마">
-        <option value="system">테마: 자동</option>
-        <option value="light">테마: 라이트</option>
-        <option value="dark">테마: 다크</option>
-      </select>
-    </div>
-    <section id="login" class="login-shell">
-      <form id="login-form" class="login-card">
-        <div class="app-icon">↗</div>
-        <span class="eyebrow">PRIVATE CONTROL PANEL</span>
-        <h1>연결을 관리하는<br />가장 편안한 방법.</h1>
-        <p>
-          ISPSender에 오신 것을 환영합니다.<br />Tailscale 네트워크에서 안전하게
-          시작하세요.
-        </p>
-        <label for="password">관리자 비밀번호</label
-        ><input
+    <section id="login" class="login-screen">
+      <form id="login-form" class="login-sheet">
+        <span class="app-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M6 7l6 5 6-5M12 12v6" />
+            <circle cx="6" cy="6" r="2" />
+            <circle cx="18" cy="6" r="2" />
+            <circle cx="12" cy="18" r="2" />
+          </svg>
+        </span>
+        <h1 class="login-title">ISPSender</h1>
+        <label for="password" class="login-label">관리자 비밀번호</label>
+        <input
           id="password"
+          class="field"
           type="password"
           autocomplete="current-password"
           required
           minlength="12"
-          placeholder="비밀번호 입력"
-        /><button class="primary" type="submit">로그인 <span>→</span></button>
-        <p id="login-error" role="alert"></p>
-        <div class="secure-caption">◈ Tailnet + Password protected</div>
+        />
+        <button class="button primary wide" type="submit">로그인</button>
+        <p id="login-error" class="form-error" role="alert"></p>
       </form>
     </section>
-    <div id="app" class="layout" hidden>
-      <aside>
-        <a class="brand" href="/"
-          ><div class="brand-icon">↗</div>
-          <div>ISPSender<small>CONTROL CENTER</small></div></a
-        >
-        <div class="workspace-label">워크스페이스</div>
-        <nav aria-label="주 메뉴">
-          <button data-page="overview" class="nav active">
-            ◫ <span>대시보드</span></button
-          ><button data-page="routing" class="nav">
-            ⇄ <span>서버 · 라우팅</span></button
-          ><button data-page="logs" class="nav">
-            ≡ <span>플레이어 접속 기록</span></button
-          ><button data-page="settings" class="nav">
-            ⚙ <span>설정</span>
+
+    <div id="app" class="app" hidden>
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M6 7l6 5 6-5M12 12v6" />
+              <circle cx="6" cy="6" r="2" />
+              <circle cx="18" cy="6" r="2" />
+              <circle cx="12" cy="18" r="2" />
+            </svg>
+          </span>
+          <span class="brand-name">ISPSender</span>
+        </div>
+        <nav class="nav" aria-label="주 메뉴">
+          <button type="button" class="nav-item" data-page="overview" aria-current="page">
+            <span class="icon-tile tile-orange" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+            </span>
+            <span class="nav-label">개요</span>
+          </button>
+          <button type="button" class="nav-item" data-page="routing">
+            <span class="icon-tile tile-green" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 7h4l8 10h4M4 17h4l8-10h4" />
+              </svg>
+            </span>
+            <span class="nav-label">서버 · 라우팅</span>
+          </button>
+          <button type="button" class="nav-item" data-page="simulator">
+            <span class="icon-tile tile-indigo" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="M16 16l5 5" />
+              </svg>
+            </span>
+            <span class="nav-label">시뮬레이터</span>
+          </button>
+          <button type="button" class="nav-item" data-page="stats">
+            <span class="icon-tile tile-pink" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M5 20v-8M12 20V5M19 20v-11" />
+              </svg>
+            </span>
+            <span class="nav-label">통계</span>
+          </button>
+          <button type="button" class="nav-item" data-page="logs">
+            <span class="icon-tile tile-teal" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M9 6h11M9 12h11M9 18h11" />
+                <path d="M4 6h.01M4 12h.01M4 18h.01" />
+              </svg>
+            </span>
+            <span class="nav-label">접속 기록</span>
+          </button>
+          <button type="button" class="nav-item" data-page="settings">
+            <span class="icon-tile tile-gray" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+                <circle cx="16" cy="7" r="2" />
+                <circle cx="8" cy="17" r="2" />
+              </svg>
+            </span>
+            <span class="nav-label">설정</span>
           </button>
         </nav>
-        <div class="sidebar-bottom">
-          <div class="private-badge"><i></i> 비공개 관리 공간</div>
-          <p>네트워크의 모든 연결,<br />한곳에서 명확하게.</p>
-          <button id="logout" class="text-button">로그아웃 ↗</button>
+        <div class="sidebar-footer">
+          <button id="logout" type="button" class="button">로그아웃</button>
         </div>
       </aside>
-      <main>
-        <header>
-          <div>
-            <div class="eyebrow">YOUR NETWORK, AT A GLANCE</div>
-            <h1 id="page-title">대시보드</h1>
-            <p id="page-description">모든 연결이 올바른 곳에 도착하도록.</p>
+
+      <main id="content" class="content">
+        <div id="content-inner" class="content-inner" data-width="narrow">
+          <header class="page-header">
+            <h1 id="page-title">개요</h1>
+            <button id="refresh" type="button" class="button">새로고침</button>
+          </header>
+          <div id="notice" class="notice" role="status" hidden></div>
+          <div id="restart" class="banner" hidden>
+            설정이 저장되었습니다. 웹 리스너·비밀번호 또는 DB 파일 변경은 프록시를
+            재시작하면 적용됩니다.
           </div>
-          <div class="header-right">
-            <span class="live"><i></i> LIVE · 10초 갱신</span
-            ><button id="refresh" class="secondary">새로고침 ↻</button>
-          </div>
-        </header>
-        <div id="notice" class="notice" role="status" hidden></div>
-        <div id="restart" class="notice" hidden>
-          설정이 저장되었습니다. 웹 리스너·비밀번호 또는 DB 파일 변경은 프록시를
-          재시작하면 적용됩니다.
-        </div>
-        <section id="overview" class="page">
-          <div class="stats">
-            <article class="stat">
-              <span>서버 상태</span><strong id="stat-servers">—</strong
-              ><small>살아 있는 서버 / 전체</small>
-            </article>
-            <article class="stat">
-              <span>Fallback</span><strong id="stat-fallback">—</strong
-              ><small>기본 경로를 사용할 수 없을 때</small>
-            </article>
-            <article class="stat">
-              <span>IP 데이터베이스</span><strong id="stat-db">—</strong
-              ><small id="stat-date">다운로드 확인 중</small>
-            </article>
-          </div>
-          <div class="overview-grid">
-            <article class="card">
-              <div class="card-heading">
-                <div>
-                  <h2>서버의 지금</h2>
-                  <p>10초마다 서비스 포트에 TCP 상태 확인</p>
+
+          <!-- 개요 -->
+          <section id="overview" class="page">
+            <div class="stat-tiles">
+              <article class="stat-tile">
+                <span class="stat-label">서버</span>
+                <strong id="stat-servers" class="stat-value">—</strong>
+                <span class="stat-note">정상 응답 / 전체</span>
+              </article>
+              <article class="stat-tile">
+                <span class="stat-label">Fallback</span>
+                <strong id="stat-fallback" class="stat-value">—</strong>
+                <span class="stat-note">기본 경로를 사용할 수 없을 때</span>
+              </article>
+              <article class="stat-tile">
+                <span class="stat-label">IP 데이터베이스</span>
+                <strong id="stat-db" class="stat-value">—</strong>
+                <span id="stat-db-note" class="stat-note">다운로드 확인 중</span>
+              </article>
+            </div>
+
+            <section class="section">
+              <h2 class="section-caption">서버 상태</h2>
+              <div id="server-list" class="group"></div>
+              <p class="section-footer">10초마다 상태를 확인합니다.</p>
+            </section>
+
+            <section class="section">
+              <h2 class="section-caption">경로</h2>
+              <div class="group">
+                <div class="row">
+                  <label class="row-label" for="fallback-toggle">Fallback 서버 사용</label>
+                  <label class="switch">
+                    <input id="fallback-toggle" type="checkbox" role="switch" />
+                    <span class="track" aria-hidden="true"></span>
+                  </label>
                 </div>
-                <span class="pill">HEALTH</span>
               </div>
-              <div id="server-list" class="server-list"></div>
-            </article>
-            <article class="card fallback-card">
-              <div class="subtle-icon">⇄</div>
-              <h2>연결은 계속되어야 하니까.</h2>
-              <p>
-                ASN · 국가 · 기본 서버를 차례로 확인하고, 사용 가능한 서버가
-                없으면 fallback으로 연결합니다.
+              <p class="section-footer">일반 경로를 모두 사용할 수 없을 때만 사용합니다.</p>
+            </section>
+
+            <section class="section">
+              <h2 class="section-caption">IP 데이터베이스</h2>
+              <div class="group">
+                <div class="row">
+                  <span class="row-label">마지막 다운로드</span>
+                  <span id="db-last" class="row-value">기록 없음</span>
+                </div>
+                <div class="row">
+                  <span class="row-label">다음 업데이트</span>
+                  <span id="db-next" class="row-value">확인 중</span>
+                </div>
+              </div>
+              <p class="section-footer">설정한 시간대의 자정에 갱신합니다.</p>
+            </section>
+
+            <section class="section">
+              <h2 class="section-caption">최근 접속</h2>
+              <div id="recent-list" class="group"></div>
+              <p class="section-footer">전체 기록은 접속 기록에서 날짜별로 확인합니다.</p>
+            </section>
+          </section>
+
+          <!-- 서버 · 라우팅 -->
+          <section id="routing" class="page" hidden>
+            <form id="check-form" class="section">
+              <h2 class="section-caption">주소 확인</h2>
+              <div class="group">
+                <div class="row">
+                  <label class="row-label" for="check-address">주소</label>
+                  <div class="row-controls">
+                    <input
+                      id="check-address"
+                      class="field wide-field"
+                      type="text"
+                      placeholder="mc.example.com:25565"
+                      autocomplete="off"
+                      spellcheck="false"
+                      required
+                    />
+                    <button id="check-submit" class="button" type="submit">확인</button>
+                  </div>
+                </div>
+              </div>
+              <p id="check-error" class="form-error" role="alert"></p>
+              <p class="section-footer">
+                포트 없이 도메인만 쓰거나 :25565를 쓰면 SRV 레코드를 자동으로 따릅니다.
               </p>
-              <div class="toggle-line">
-                <label for="fallback-toggle">Fallback 사용</label
-                ><input type="checkbox" id="fallback-toggle" role="switch" />
-              </div>
-              <small id="next-download">다음 DB 업데이트 —</small>
-            </article>
-          </div>
-          <article class="card">
-            <div class="card-heading">
-              <div>
-                <h2>최근 접속</h2>
-                <p>
-                  현재 실행 중 수집한 최근 500건 · 기록 탭에서 날짜별 전체 조회
-                </p>
-              </div>
-              <button data-page="logs" class="text-button">모든 기록 →</button>
-            </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>시각</th>
-                    <th>플레이어 / IP</th>
-                    <th>ASN · 국가</th>
-                    <th>대상 서버</th>
-                    <th>결과</th>
-                  </tr>
-                </thead>
-                <tbody id="recent-rows"></tbody>
-              </table>
-            </div>
-          </article>
-        </section>
-        <section id="routing" class="page" hidden>
-          <div class="section-intro">
-            <h2>모든 플레이어에게 알맞은 경로.</h2>
-            <p>
-              서버는 한 줄에 하나씩 입력하세요. 같은 서버를 여러 번 입력하면
-              가중치가 높아집니다.
-            </p>
-          </div>
-          <form id="routing-form">
-            <div class="two-col">
-              <article class="card">
-                <h2>기본 서버 풀</h2>
-                <p>일치하는 규칙이 없거나 앞선 서버가 모두 응답하지 않을 때</p>
-                <label for="default-servers">서버 목록</label
-                ><textarea
-                  id="default-servers"
-                  rows="5"
-                  placeholder="global1.example.com:25565&#10;global2.example.com:25565"
-                ></textarea>
-              </article>
-              <article class="card">
-                <h2>Fallback 서버 풀</h2>
-                <p>일반 경로를 모두 사용할 수 없을 때 연결할 비상 서버</p>
-                <label for="fallback-servers">서버 목록</label
-                ><textarea
-                  id="fallback-servers"
-                  rows="5"
-                  placeholder="backup1.example.com:25565&#10;backup2.example.com:25565"
-                ></textarea>
-              </article>
-            </div>
-            <article class="card rules-card">
-              <div class="card-heading">
-                <div>
-                  <h2>ASN · 국가 라우팅</h2>
-                  <p>
-                    ASN → 국가 코드 → 국가 이름 → 기본 → fallback 순으로
-                    확인합니다.
-                  </p>
+            </form>
+
+            <section id="check-result-section" class="section" hidden>
+              <h2 class="section-caption">확인 결과</h2>
+              <div id="check-result" class="group"></div>
+            </section>
+
+            <form id="routing-form">
+              <section class="section">
+                <h2 class="section-caption">기본 서버 풀</h2>
+                <div class="group">
+                  <div class="row stack">
+                    <label class="row-label" for="default-servers">서버 목록</label>
+                    <textarea
+                      id="default-servers"
+                      class="textarea"
+                      rows="4"
+                      placeholder="global1.example.com:25565&#10;global2.example.com:25565"
+                    ></textarea>
+                  </div>
                 </div>
-                <button type="button" id="add-rule" class="secondary">
-                  + 규칙 추가
-                </button>
+                <p class="section-footer">
+                  일치하는 규칙이 없거나 앞선 서버가 모두 응답하지 않을 때 사용합니다.
+                  같은 서버를 여러 번 입력하면 가중치가 높아집니다.
+                  포트 없이 도메인만 쓰거나 :25565를 쓰면 SRV 레코드를 자동으로 따릅니다.
+                </p>
+              </section>
+
+              <section class="section">
+                <h2 class="section-caption">Fallback 서버 풀</h2>
+                <div class="group">
+                  <div class="row stack">
+                    <label class="row-label" for="fallback-servers">서버 목록</label>
+                    <textarea
+                      id="fallback-servers"
+                      class="textarea"
+                      rows="4"
+                      placeholder="backup1.example.com:25565&#10;backup2.example.com:25565"
+                    ></textarea>
+                  </div>
+                </div>
+                <p class="section-footer">일반 경로를 모두 사용할 수 없을 때 연결할 비상 서버입니다.</p>
+              </section>
+
+              <section class="section">
+                <div class="section-head">
+                  <h2 class="section-caption">ASN · 국가 규칙</h2>
+                  <button id="add-rule" type="button" class="button">규칙 추가</button>
+                </div>
+                <div id="rules" class="group"></div>
+                <p class="section-footer">ASN → 국가 코드 → 국가 이름 → 기본 → fallback 순으로 확인합니다.</p>
+              </section>
+
+              <div class="save-bar">
+                <span class="save-text">저장하면 라우팅에 즉시 적용됩니다. 새 서버는 첫 상태 확인 후 사용합니다.</span>
+                <button id="routing-submit" class="button primary" type="submit">라우팅 저장</button>
               </div>
-              <div id="rules"></div>
-            </article>
-            <div class="save-bar">
-              <span
-                >저장하면 라우팅에 즉시 적용됩니다. 새 서버는 첫 상태 확인 후
-                사용합니다.</span
-              ><button class="primary" type="submit">라우팅 저장</button>
-            </div>
-          </form>
-        </section>
-        <section id="logs" class="page" hidden>
-          <article class="card">
-            <div class="card-heading">
-              <div>
-                <h2>연결의 모든 기록</h2>
-                <p>접속 · 전송 · 연결 거절 기록을 날짜별로 확인하세요.</p>
+            </form>
+          </section>
+
+          <!-- 시뮬레이터 -->
+          <section id="simulator" class="page" hidden>
+            <form id="simulate-form" class="section">
+              <h2 class="section-caption">IP 주소</h2>
+              <div class="group">
+                <div class="row">
+                  <label class="row-label" for="sim-ip">접속 IP</label>
+                  <div class="row-controls">
+                    <input
+                      id="sim-ip"
+                      class="field wide-field"
+                      type="text"
+                      placeholder="예: 1.2.3.4"
+                      autocomplete="off"
+                      spellcheck="false"
+                      required
+                    />
+                    <button id="sim-submit" class="button" type="submit">확인</button>
+                  </div>
+                </div>
               </div>
-              <button id="export" class="secondary">
-                날짜 전체 내보내기 ↓
-              </button>
+              <p id="sim-error" class="form-error" role="alert"></p>
+              <p class="section-footer">조회만 하며 실제 접속을 만들지 않습니다.</p>
+            </form>
+
+            <div id="sim-output" hidden>
+              <section class="section">
+                <h2 class="section-caption">IP 정보</h2>
+                <div id="sim-info" class="group"></div>
+              </section>
+              <section class="section">
+                <h2 class="section-caption">라우팅 순서</h2>
+                <div id="sim-steps" class="group"></div>
+                <p class="section-footer">위에서부터 확인하고, 사용 가능한 서버가 있는 첫 단계를 선택합니다.</p>
+              </section>
+              <section class="section">
+                <h2 class="section-caption">결과</h2>
+                <div id="sim-result" class="group"></div>
+              </section>
             </div>
-            <div class="log-tools">
-              <label>조회 날짜<input id="log-date" type="date" /></label
-              ><label
-                >현재 페이지 검색<input
+          </section>
+
+          <!-- 통계 -->
+          <section id="stats" class="page" hidden>
+            <div class="group section">
+              <div class="row">
+                <span id="stats-range-label" class="row-label">기간</span>
+                <div class="segmented" role="radiogroup" aria-labelledby="stats-range-label">
+                  <label class="segment">
+                    <input class="visually-hidden" type="radio" name="stats-range" value="1" />
+                    <span>오늘</span>
+                  </label>
+                  <label class="segment">
+                    <input class="visually-hidden" type="radio" name="stats-range" value="7" checked />
+                    <span>7일</span>
+                  </label>
+                  <label class="segment">
+                    <input class="visually-hidden" type="radio" name="stats-range" value="30" />
+                    <span>30일</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <p id="stats-error" class="form-error" role="alert"></p>
+
+            <div class="stat-tiles">
+              <article class="stat-tile">
+                <span class="stat-label">전송</span>
+                <strong id="stats-transferred" class="stat-value">—</strong>
+              </article>
+              <article class="stat-tile">
+                <span class="stat-label">거절</span>
+                <strong id="stats-kicked" class="stat-value">—</strong>
+              </article>
+              <article class="stat-tile">
+                <span class="stat-label">거절률</span>
+                <strong id="stats-rate" class="stat-value">—</strong>
+              </article>
+            </div>
+            <p id="stats-period" class="section-footer"></p>
+
+            <div id="stats-empty" class="group" hidden>
+              <div class="row empty">선택한 기간에 접속 기록이 없습니다.</div>
+            </div>
+
+            <div id="stats-content" hidden>
+              <section class="section">
+                <h2 class="section-caption">일별 접속</h2>
+                <div class="group chart-group">
+                  <div class="legend">
+                    <span class="legend-item"><i class="swatch seg-transferred" aria-hidden="true"></i>전송</span>
+                    <span class="legend-item"><i class="swatch seg-kicked" aria-hidden="true"></i>거절</span>
+                  </div>
+                  <div id="stats-chart" class="chart-host">
+                    <div id="chart-tip" class="chart-tip" aria-hidden="true" hidden></div>
+                  </div>
+                  <details class="table-view">
+                    <summary>표로 보기</summary>
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">날짜</th>
+                          <th scope="col">전송</th>
+                          <th scope="col">거절</th>
+                          <th scope="col">거절률</th>
+                        </tr>
+                      </thead>
+                      <tbody id="stats-table-rows"></tbody>
+                    </table>
+                  </details>
+                </div>
+              </section>
+
+              <section class="section">
+                <h2 class="section-caption">ASN 상위 10</h2>
+                <div id="stats-asn" class="group"></div>
+              </section>
+              <section class="section">
+                <h2 class="section-caption">국가 상위 10</h2>
+                <div id="stats-country" class="group"></div>
+              </section>
+              <section class="section">
+                <h2 class="section-caption">서버 상위 10</h2>
+                <div id="stats-server" class="group"></div>
+              </section>
+            </div>
+          </section>
+
+          <!-- 접속 기록 -->
+          <section id="logs" class="page" hidden>
+            <div class="group section">
+              <div class="row">
+                <label class="row-label" for="log-date">날짜</label>
+                <div class="row-controls">
+                  <input id="log-date" class="field" type="date" />
+                  <button id="load-logs" class="button" type="button">조회</button>
+                  <button id="export" class="button" type="button">날짜 전체 내보내기</button>
+                </div>
+              </div>
+              <div class="row">
+                <label class="row-label" for="log-search">검색</label>
+                <input
                   id="log-search"
+                  class="field wide-field"
                   type="search"
-                  placeholder="플레이어, IP, ASN, 서버" /></label
-              ><button id="load-logs" class="secondary">조회</button>
+                  maxlength="100"
+                  placeholder="플레이어, IP, ASN, 서버"
+                  autocomplete="off"
+                />
+              </div>
             </div>
-            <div class="table-scroll">
-              <table>
+            <p class="section-footer">
+              검색은 선택한 날짜의 전체 기록에서 찾습니다. 내보내기는 검색어와 관계없이 날짜 전체를 저장합니다.
+            </p>
+
+            <div class="table-wrap group">
+              <table class="data-table log-table">
                 <thead>
                   <tr>
-                    <th>시각</th>
-                    <th>플레이어 / IP</th>
-                    <th>ASN · 국가</th>
-                    <th>대상 서버 / 규칙</th>
-                    <th>결과</th>
+                    <th scope="col">시각</th>
+                    <th scope="col">플레이어 / IP</th>
+                    <th scope="col">ASN / 국가</th>
+                    <th scope="col">서버 / 규칙</th>
+                    <th scope="col">결과</th>
                   </tr>
                 </thead>
                 <tbody id="log-rows"></tbody>
               </table>
             </div>
-            <div class="pagination">
-              <button id="prev-logs" class="secondary">← 이전</button
-              ><span id="log-page">1 페이지</span
-              ><button id="next-logs" class="secondary">다음 →</button>
+            <div class="pager">
+              <button id="prev-logs" class="button" type="button">이전</button>
+              <span id="log-page" class="pager-label">1 페이지</span>
+              <button id="next-logs" class="button" type="button">다음</button>
             </div>
-          </article>
-        </section>
-        <section id="settings" class="page" hidden>
-          <form id="settings-form">
-            <div id="settings-fields"></div>
-            <div class="save-bar">
-              <span
-                >비밀 값은 표시하지 않습니다. 비워 두면 기존 값을
-                유지합니다.</span
-              ><button class="primary" type="submit">설정 저장</button>
-            </div>
-          </form>
-        </section>
-        <footer>ISPSender <span>Designed for quieter operations.</span></footer>
+          </section>
+
+          <!-- 설정 -->
+          <section id="settings" class="page" hidden>
+            <section class="section">
+              <h2 class="section-caption">화면</h2>
+              <div class="group">
+                <div class="row">
+                  <span id="theme-label" class="row-label">테마</span>
+                  <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+                    <label class="segment">
+                      <input class="visually-hidden" type="radio" name="theme-choice" value="system" />
+                      <span>자동</span>
+                    </label>
+                    <label class="segment">
+                      <input class="visually-hidden" type="radio" name="theme-choice" value="light" />
+                      <span>라이트</span>
+                    </label>
+                    <label class="segment">
+                      <input class="visually-hidden" type="radio" name="theme-choice" value="dark" />
+                      <span>다크</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <p class="section-footer">선택한 화면 모드는 이 브라우저에만 저장됩니다.</p>
+            </section>
+
+            <form id="settings-form">
+              <div id="settings-fields"></div>
+              <div class="save-bar">
+                <span class="save-text">비밀 값은 표시하지 않습니다. 비워 두면 기존 값을 유지합니다.</span>
+                <button id="settings-submit" class="button primary" type="submit">설정 저장</button>
+              </div>
+            </form>
+          </section>
+        </div>
       </main>
     </div>
   </body>

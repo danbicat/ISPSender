@@ -1,15 +1,22 @@
 package net.transferproxy.ispsender.config;
 
+import net.transferproxy.ispsender.health.HealthMonitor;
+
 import org.jetbrains.annotations.Nullable;
 
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Explicit setters also handle untyped YAML lists reliably with Jackson 3. */
 public final class ISPSenderConfiguration {
     public static final String TOKEN_PLACEHOLDER = "YOUR_IPINFO_TOKEN";
     public static final String TOKEN_ENVIRONMENT_KEY = "IPINFO_TOKEN";
+    public static final String DISCORD_WEBHOOK_ENVIRONMENT_KEY = "ISPSENDER_DISCORD_WEBHOOK";
+    private static final Pattern DISCORD_WEBHOOK =
+            Pattern.compile(
+                    "^https://(?:ptb\\.|canary\\.)?discord(?:app)?\\.com/api(?:/v\\d+)?/webhooks/\\d+/[A-Za-z0-9_-]+$");
     private String token = TOKEN_PLACEHOLDER;
     private String databaseUrl = "https://ipinfo.io/data/ipinfo_lite.mmdb?token={token}";
     private String databaseFile = "ipinfo_lite.mmdb";
@@ -26,12 +33,16 @@ public final class ISPSenderConfiguration {
     private Object fallbackServers = List.of();
     private boolean fallbackEnabled = true;
     private int healthCheckTimeoutMillis = 2000;
+    private String healthCheckMode = "minecraft";
+    private int healthFailureThreshold = 2;
     private String noServerMessage = "<red>No server is available for your connection.";
     private boolean webEnabled;
     private String webBind = "127.0.0.1";
     private int webPort = 8080;
     private String webPassword = "";
     private int connectionLogRetentionDays = 30;
+    private boolean discordAlertsEnabled;
+    private String discordWebhookUrl = "";
 
     public @Nullable String resolveToken() {
         final String env = System.getenv(TOKEN_ENVIRONMENT_KEY);
@@ -44,6 +55,13 @@ public final class ISPSenderConfiguration {
     public String resolveWebPassword() {
         final String env = System.getenv("ISPSENDER_WEB_PASSWORD");
         return env != null && !env.isBlank() ? env : webPassword;
+    }
+
+    /** The webhook in use: the environment variable when set, otherwise the configured URL. */
+    public @Nullable String resolveDiscordWebhook() {
+        final String env = System.getenv(DISCORD_WEBHOOK_ENVIRONMENT_KEY);
+        final String value = env != null && !env.isBlank() ? env : discordWebhookUrl;
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public void validate() {
@@ -74,6 +92,12 @@ public final class ISPSenderConfiguration {
             throw new IllegalArgumentException("Invalid database timeout");
         if (healthCheckTimeoutMillis < 100 || healthCheckTimeoutMillis > 5000)
             throw new IllegalArgumentException("health-check-timeout-millis must be 100..5000");
+        if (healthCheckMode == null
+                || !(healthCheckMode.equalsIgnoreCase("minecraft")
+                        || healthCheckMode.equalsIgnoreCase("tcp")))
+            throw new IllegalArgumentException("health-check-mode must be minecraft or tcp");
+        if (healthFailureThreshold < 1 || healthFailureThreshold > 10)
+            throw new IllegalArgumentException("health-failure-threshold must be 1..10");
         if (webPort < 1 || webPort > 65535) throw new IllegalArgumentException("Invalid web-port");
         if (connectionLogRetentionDays < 1 || connectionLogRetentionDays > 365)
             throw new IllegalArgumentException("connection-log-retention-days must be 1..365");
@@ -87,6 +111,28 @@ public final class ISPSenderConfiguration {
             throw new IllegalArgumentException(
                     "Set a web password of at least 12 characters (or ISPSENDER_WEB_PASSWORD)");
         net.transferproxy.ispsender.web.WebPanel.validateBindRange(webBind);
+    }
+
+    /**
+     * Checks the Discord webhook URL. Blank is allowed. This is deliberately not part of
+     * {@link #validateCore()}: a bad alert setting must never stop routing. The message never
+     * contains the URL.
+     */
+    public void validateAlerts() {
+        if (discordWebhookUrl == null || discordWebhookUrl.isBlank()) return;
+        if (!isDiscordWebhook(discordWebhookUrl.trim()))
+            throw new IllegalArgumentException("discord-webhook-url must be a Discord webhook URL");
+    }
+
+    public static boolean isDiscordWebhook(final @Nullable String value) {
+        return value != null && DISCORD_WEBHOOK.matcher(value).matches();
+    }
+
+    /** The probe mode used by health checks. */
+    public HealthMonitor.Mode healthMode() {
+        return "tcp".equalsIgnoreCase(healthCheckMode)
+                ? HealthMonitor.Mode.TCP
+                : HealthMonitor.Mode.MINECRAFT;
     }
 
     public String getToken() {
@@ -209,6 +255,22 @@ public final class ISPSenderConfiguration {
         healthCheckTimeoutMillis = v;
     }
 
+    public String getHealthCheckMode() {
+        return healthCheckMode;
+    }
+
+    public void setHealthCheckMode(String v) {
+        healthCheckMode = v;
+    }
+
+    public int getHealthFailureThreshold() {
+        return healthFailureThreshold;
+    }
+
+    public void setHealthFailureThreshold(int v) {
+        healthFailureThreshold = v;
+    }
+
     public String getNoServerMessage() {
         return noServerMessage;
     }
@@ -255,5 +317,21 @@ public final class ISPSenderConfiguration {
 
     public void setConnectionLogRetentionDays(int v) {
         connectionLogRetentionDays = v;
+    }
+
+    public boolean isDiscordAlertsEnabled() {
+        return discordAlertsEnabled;
+    }
+
+    public void setDiscordAlertsEnabled(boolean v) {
+        discordAlertsEnabled = v;
+    }
+
+    public String getDiscordWebhookUrl() {
+        return discordWebhookUrl;
+    }
+
+    public void setDiscordWebhookUrl(String v) {
+        discordWebhookUrl = v == null ? "" : v;
     }
 }

@@ -1,5 +1,7 @@
 package net.transferproxy.ispsender.data;
 
+import net.transferproxy.ispsender.web.IpLiteral;
+
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,12 +30,8 @@ public record Server(@NotNull String host, int port) {
             int end = trimmed.indexOf(']');
             if (end < 2) return null;
             host = trimmed.substring(1, end);
-            try {
-                if (!(java.net.InetAddress.getByName(host) instanceof java.net.Inet6Address))
-                    return null;
-            } catch (java.net.UnknownHostException e) {
-                return null;
-            }
+            // Only an IPv6 literal may be bracketed: a name would need a DNS lookup here.
+            if (!(IpLiteral.parse(host) instanceof java.net.Inet6Address)) return null;
             if (end == trimmed.length() - 1) return new Server(host, DEFAULT_PORT);
             if (trimmed.charAt(end + 1) != ':') return null;
             portText = trimmed.substring(end + 2);

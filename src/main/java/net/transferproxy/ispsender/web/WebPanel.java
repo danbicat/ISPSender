@@ -4,11 +4,16 @@ import com.google.gson.Gson;
 import com.sun.net.httpserver.*;
 
 import net.transferproxy.ispsender.config.*;
+import net.transferproxy.ispsender.data.Server;
 import net.transferproxy.ispsender.database.*;
+import net.transferproxy.ispsender.dns.SrvResolver;
 import net.transferproxy.ispsender.health.HealthMonitor;
 import net.transferproxy.ispsender.logging.ConnectionLogs;
+import net.transferproxy.ispsender.routing.RoutingTable;
 
 import tools.jackson.databind.json.JsonMapper;
+
+import javax.naming.NamingException;
 
 import java.io.*;
 import java.net.*;
@@ -38,6 +43,8 @@ public final class WebPanel implements AutoCloseable {
     private final DailyDatabaseUpdater updater;
     private final ConnectionLogs logs;
     private final Runnable onSave;
+    // Address checks may take several seconds each, so only two run at a time.
+    private final Semaphore checks = new Semaphore(2);
     private final ISPSenderConfiguration boot;
     private final HttpServer server;
     private final ExecutorService executor =
@@ -222,6 +229,12 @@ public final class WebPanel implements AutoCloseable {
                 state.put("recentLogs", logs.recent());
                 state.put("tokenConfigured", store.current().config().resolveToken() != null);
                 state.put("restartRequired", restartRequired());
+                state.put(
+                        "healthFailureThreshold",
+                        store.current().config().getHealthFailureThreshold());
+                state.put(
+                        "discordConfigured",
+                        store.current().config().resolveDiscordWebhook() != null);
                 // Gson's reflection cannot access java.time internals on Java 17.
                 state.put(
                         "lastDownload",
@@ -229,6 +242,16 @@ public final class WebPanel implements AutoCloseable {
                 respond(exchange, 200, state);
             } else if (path.equals("/api/config") && method.equals("PUT")) {
                 Map<String, Object> changes = body(exchange);
+                // Say what is wrong without echoing the URL itself.
+                if (changes.get("discord-webhook-url") instanceof String webhook
+                        && !webhook.isBlank()
+                        && !ISPSenderConfiguration.isDiscordWebhook(webhook.trim())) {
+                    respond(
+                            exchange,
+                            400,
+                            Map.of("error", "Discord 웹훅 URL 형식이 올바르지 않습니다."));
+                    return;
+                }
                 // A new address must work after the restart, or the panel locks itself out.
                 if (changes.get("web-bind") instanceof String bind
                         && !bind.equals(store.current().config().getWebBind())) validateBind(bind);
@@ -247,7 +270,18 @@ public final class WebPanel implements AutoCloseable {
                 LocalDate day =
                         LocalDate.parse(params.getOrDefault("date", updater.today().toString()));
                 int offset = Integer.parseInt(params.getOrDefault("offset", "0"));
-                respond(exchange, 200, logs.read(day, offset, 100));
+                String search = params.getOrDefault("q", "");
+                if (search.length() > 100) {
+                    respond(exchange, 400, Map.of("error", "검색어는 100자 이하로 입력하세요."));
+                    return;
+                }
+                respond(exchange, 200, logs.read(day, offset, 100, search));
+            } else if (path.equals("/api/stats") && method.equals("GET")) {
+                statistics(exchange);
+            } else if (path.equals("/api/simulate") && method.equals("POST")) {
+                simulate(exchange);
+            } else if (path.equals("/api/check-address") && method.equals("POST")) {
+                checkAddress(exchange);
             } else {
                 respond(exchange, 404, Map.of("error", "Not found"));
             }
@@ -265,6 +299,141 @@ public final class WebPanel implements AutoCloseable {
             safeError(exchange, 500, "Request failed; check server storage and configuration");
         } finally {
             exchange.close();
+        }
+    }
+
+    private void statistics(HttpExchange exchange) throws IOException {
+        String raw = query(exchange.getRequestURI().getRawQuery()).getOrDefault("days", "7");
+        int days;
+        try {
+            days = Integer.parseInt(raw);
+        } catch (NumberFormatException e) {
+            days = 0;
+        }
+        if (days < 1 || days > 31) {
+            respond(exchange, 400, Map.of("error", "기간은 1~31일 사이로 입력하세요."));
+            return;
+        }
+        respond(exchange, 200, logs.stats(updater.today(), days));
+    }
+
+    /** Shows the rules a connection from this address would meet, using the live health state. */
+    private void simulate(HttpExchange exchange) throws IOException {
+        Object value = body(exchange).get("ip");
+        InetAddress address = value instanceof String text ? IpLiteral.parse(text.trim()) : null;
+        if (address == null) {
+            respond(exchange, 400, Map.of("error", "올바른 IP 주소를 입력하세요."));
+            return;
+        }
+        ConfigurationStore.Snapshot snapshot = store.current();
+        IPInfoRecord record = database.lookup(address);
+        List<RoutingTable.Step> steps =
+                snapshot.routing()
+                        .explain(record, health::isAlive, snapshot.config().isFallbackEnabled());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ip", address.getHostAddress());
+        result.put("found", record != null);
+        if (record != null) {
+            result.put("asn", record.asn());
+            result.put("asnName", record.asName());
+            result.put("country", record.country());
+            result.put("countryCode", record.countryCode());
+        }
+        result.put("steps", steps);
+        for (RoutingTable.Step step : steps) {
+            if (!step.selected()) continue;
+            // The first available server of the selected rule, so the answer is repeatable.
+            Server server = Server.parse(step.available().get(0));
+            if (server != null) {
+                result.put(
+                        "route",
+                        Map.of(
+                                "server",
+                                server.toString(),
+                                "target",
+                                health.target(server).toString(),
+                                "rule",
+                                step.rule()));
+            }
+            break;
+        }
+        respond(exchange, 200, result);
+    }
+
+    private void checkAddress(HttpExchange exchange) throws IOException {
+        Object value = body(exchange).get("address");
+        String input = value instanceof String text ? text.trim() : "";
+        Server configured = Server.parse(input);
+        if (configured == null) {
+            respond(exchange, 400, Map.of("error", "주소 형식이 올바르지 않습니다."));
+            return;
+        }
+        if (!checks.tryAcquire()) {
+            respond(
+                    exchange,
+                    429,
+                    Map.of("error", "다른 확인이 진행 중입니다. 잠시 후 다시 시도하세요."));
+            return;
+        }
+        try {
+            respond(exchange, 200, inspect(input, configured));
+        } finally {
+            checks.release();
+        }
+    }
+
+    /** Fresh DNS and probes, not the cache, so the answer matches what a transfer would use now. */
+    private Map<String, Object> inspect(String input, Server configured) {
+        SrvResolver resolver = health.resolver();
+        int timeout = store.current().config().getHealthCheckTimeoutMillis();
+        String host = configured.host();
+        List<SrvResolver.Record> srv = List.of();
+        List<String> cname = List.of();
+        if (IpLiteral.parse(host) == null) {
+            try {
+                srv = resolver.queryFresh(host);
+            } catch (NamingException e) {
+                srv = List.of();
+            }
+            cname = resolver.queryCname(host);
+        }
+        boolean usesSrv = resolver.eligible(configured) && !srv.isEmpty();
+        Server target = usesSrv ? new Server(srv.get(0).target(), srv.get(0).port()) : configured;
+        HealthMonitor.Status tcp = HealthMonitor.probe(target, timeout, HealthMonitor.Mode.TCP);
+        boolean reachable = tcp.alive();
+        // The status ping runs only after a TCP connection, so both facts are shown.
+        HealthMonitor.Status ping =
+                reachable
+                        ? HealthMonitor.probe(target, timeout, HealthMonitor.Mode.MINECRAFT)
+                        : null;
+        boolean minecraft = ping != null && ping.alive();
+        String reason = !reachable ? tcp.reason() : !minecraft ? ping.reason() : null;
+        long latency = minecraft ? ping.latencyMillis() : tcp.latencyMillis();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("input", input);
+        result.put("host", configured.host());
+        result.put("port", configured.port());
+        result.put("srvEligible", resolver.eligible(configured));
+        result.put("srv", srv);
+        result.put("cname", cname);
+        result.put("addresses", addresses(target.host()));
+        result.put("target", target.toString());
+        result.put("usesSrv", usesSrv);
+        result.put("reachable", reachable);
+        result.put("minecraft", minecraft);
+        result.put("latencyMillis", latency);
+        if (reason != null) result.put("reason", reason);
+        return result;
+    }
+
+    private static List<String> addresses(String host) {
+        try {
+            return Arrays.stream(InetAddress.getAllByName(host))
+                    .map(InetAddress::getHostAddress)
+                    .distinct()
+                    .toList();
+        } catch (UnknownHostException e) {
+            return List.of();
         }
     }
 

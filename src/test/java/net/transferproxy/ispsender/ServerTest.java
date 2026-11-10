@@ -6,6 +6,8 @@ import net.transferproxy.ispsender.data.Server;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 class ServerTest {
     @Test
     void parsesIpv6AndRejectsMalformedTargets() {
@@ -22,5 +24,17 @@ class ServerTest {
                     "https://host",
                     "[]:3"
                 }) assertNull(Server.parse(value), value);
+    }
+
+    @Test
+    void bracketedNamesAreRejectedWithoutADnsLookup() {
+        // Only IPv6 literals may be bracketed. A name would need a lookup that could block a check.
+        assertTimeoutPreemptively(
+                Duration.ofSeconds(1),
+                () -> {
+                    assertNull(Server.parse("[some-name.example]"));
+                    assertNull(Server.parse("[some-name.example]:25566"));
+                    assertNull(Server.parse("[1.2.3.4]"));
+                });
     }
 }

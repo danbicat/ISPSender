@@ -199,4 +199,76 @@ class ConfigurationTest {
             assertThrows(
                     IllegalArgumentException.class, () -> store.save(Map.of("database-file", name)));
     }
+    private static java.io.InputStream bundled() {
+        return ConfigurationTest.class.getResourceAsStream("/config.yml");
+    }
+
+    @Test
+    void missingKeysAreAppendedWithoutTouchingTheAdminsFile() throws Exception {
+        Path path = dir.resolve("config.yml");
+        String old =
+                """
+                # my own note
+                token: "abc"
+                database-timezone: "UTC"   # keep
+                asn-servers:
+                  "AS1": "mine.example:25565"
+                web-port: 9000
+                """;
+        Files.writeString(path, old);
+        var added = ConfigDefaults.fill(path, bundled());
+        String after = Files.readString(path);
+        assertTrue(after.startsWith(old));
+        assertTrue(added.contains("web-bind"));
+        assertTrue(added.contains("discord-webhook-url"));
+        assertFalse(added.contains("token"));
+        assertFalse(added.contains("web-port"));
+        // Comment directly above a key comes along.
+        assertTrue(after.contains("# A server leaves the pools after this many"));
+        // Admin-defined routing is never invented.
+        assertFalse(after.contains("global1.example.com"));
+        assertFalse(after.contains("kr1.example.com"));
+        var loaded = ResourceUtil.readYaml(path, ISPSenderConfiguration.class);
+        assertEquals("abc", loaded.getToken());
+        assertEquals("UTC", loaded.getDatabaseTimezone());
+        assertEquals(9000, loaded.getWebPort());
+        assertEquals(Map.of("AS1", "mine.example:25565"), loaded.getAsnServers());
+        assertEquals(2, loaded.getHealthFailureThreshold());
+        assertEquals("127.0.0.1", loaded.getWebBind());
+        // A second run has nothing left to add.
+        assertEquals(List.of(), ConfigDefaults.fill(path, bundled()));
+        assertEquals(after, Files.readString(path));
+    }
+
+    @Test
+    void removedRoutingEntriesAndBadFilesAreLeftAlone() throws Exception {
+        Path path = dir.resolve("config.yml");
+        String current = "";
+        try (var in = bundled()) {
+            current = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        // Complete file without the country rules: they stay removed.
+        String trimmed = current.replaceAll("(?s)country-servers:.*?\\n\\n", "");
+        assertFalse(trimmed.contains("country-servers"));
+        Files.writeString(path, trimmed);
+        assertEquals(List.of(), ConfigDefaults.fill(path, bundled()));
+        assertEquals(trimmed, Files.readString(path));
+        String broken = "token: [unclosed\n";
+        Files.writeString(path, broken);
+        assertEquals(List.of(), ConfigDefaults.fill(path, bundled()));
+        assertEquals(broken, Files.readString(path));
+        assertEquals(List.of(), ConfigDefaults.fill(dir.resolve("absent.yml"), bundled()));
+    }
+
+    @Test
+    void reloadAlreadyWritesMissingKeysBackThroughTheMapper() throws Exception {
+        Path path = dir.resolve("config.yml");
+        var store = new ConfigurationStore(path, new ISPSenderConfiguration());
+        Files.writeString(path, "web-port: 9000\n");
+        store.reload();
+        String after = Files.readString(path);
+        assertTrue(after.contains("health-failure-threshold"));
+        assertTrue(after.contains("discord-webhook-url"));
+        assertEquals(9000, store.current().config().getWebPort());
+    }
 }

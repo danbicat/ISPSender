@@ -30,8 +30,19 @@ public final class ISPSenderPlugin implements Plugin {
     private ConnectionLogs logs;
     private WebPanel panel;
 
+    /** An updated jar keeps the old config.yml, so keys added since then are written into it. */
+    private void addMissingConfigKeys() {
+        try (var defaults = getClass().getResourceAsStream("/config.yml")) {
+            var added = ConfigDefaults.fill(getConfigPath(), defaults);
+            if (!added.isEmpty()) LOGGER.info("Added missing keys to config.yml: {}", added);
+        } catch (Exception e) {
+            LOGGER.warn("Could not add missing keys to config.yml ({})", e.getClass().getSimpleName());
+        }
+    }
+
     @Override
     public void onEnable() {
+        addMissingConfigKeys();
         ISPSenderConfiguration config = makeConfiguration(ISPSenderConfiguration.class);
         settings = new ConfigurationStore(getConfigPath(), config);
         Path databasePath = getDirectoryPath().resolve(config.getDatabaseFile());
